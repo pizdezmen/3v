@@ -32,6 +32,7 @@ var _selected := -1
 var _idle := 0.0
 var _hint_tweens: Array = []
 var _frame_box: StyleBoxFlat
+var _dim_box: StyleBoxFlat
 var _base_pos := Vector2.ZERO
 var _clock := 0.0
 var _pending := false      # поле ще осідає: попереду падіння або збіги
@@ -56,6 +57,10 @@ func _ready() -> void:
 	_frame_box.bg_color = Art.FRAME
 	_frame_box.set_corner_radius_all(20)
 	_frame_box.anti_aliasing = true
+	_dim_box = StyleBoxFlat.new()
+	_dim_box.bg_color = Color(5 / 255.0, 4 / 255.0, 16 / 255.0, 0.6)
+	_dim_box.set_corner_radius_all(36)
+	_dim_box.anti_aliasing = true
 
 
 ## Ставить поле в заданий прямокутник (у координатах батька).
@@ -138,6 +143,8 @@ func _set_look(n: Node2D, kind: int, color: int) -> void:
 func _draw() -> void:
 	if board == null:
 		return
+	# затемнення під полем, щоб живе небо не сперечалося з каменями
+	draw_style_box(_dim_box, Rect2(Vector2(-28, -28), Vector2(board.w, board.h) * cell + Vector2(56, 56)))
 	for i in board.w * board.h:
 		if board.playable[i] == 1:
 			var r := Rect2(Vector2(i % board.w, i / board.w) * cell - Vector2(13, 13), Vector2(cell + 26, cell + 26))

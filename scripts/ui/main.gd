@@ -7,13 +7,14 @@ const LevelsScreen := preload("res://scripts/ui/levels.gd")
 const GameScreen := preload("res://scripts/game/game.gd")
 
 var _screen: Control
+var sky: Control
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var bg := Background.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
+	sky = Background.new()
+	sky.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(sky)
 	var args := OS.get_cmdline_user_args()
 	if args.size() >= 1 and args[0] == "level":
 		play_campaign(int(args[1]) if args.size() > 1 else 1)
@@ -49,6 +50,7 @@ func play_campaign(number: int) -> void:
 	g.mode = "campaign"
 	g.number = clampi(number, 1, Progress.CAMPAIGN_LEVELS)
 	g.autoplay = "auto" in OS.get_cmdline_user_args()
+	sky.go_to(Background.state_for_campaign(g.number))
 	_set_screen(g)
 
 
@@ -57,6 +59,7 @@ func play_endless() -> void:
 	g.mode = "endless"
 	g.number = Progress.endless_level
 	g.autoplay = "auto" in OS.get_cmdline_user_args()
+	sky.go_to(Background.state_for_endless(g.number))
 	_set_screen(g)
 
 
