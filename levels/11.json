@@ -1,0 +1,18 @@
+{
+ "layout": [
+  ".........",
+  ".........",
+  "#.IIIII.#",
+  "##.III.##",
+  "##.III.##",
+  "#.IIIII.#",
+  ".........",
+  "i.i.i.i.i",
+  "IiIiIiIiI",
+  "IIiIIIiII"
+ ],
+ "goals": {
+  "ice": 0
+ },
+ "moves": 19
+}

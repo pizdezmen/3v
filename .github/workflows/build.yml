@@ -1,0 +1,79 @@
+name: Тести і збирання
+
+on:
+  push:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.4.1
+
+jobs:
+  tests:
+    name: Автотести логіки
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.4.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Імпорт ресурсів
+        run: godot --headless --import || true
+      - name: Тести
+        run: godot --headless -s tests/run_tests.gd
+
+  android:
+    name: APK для Android
+    needs: tests
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.4.1
+    env:
+      GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /root/debug.keystore
+      GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+      GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
+    steps:
+      - uses: actions/checkout@v4
+      - name: Шаблони експорту і налаштування редактора
+        run: |
+          mkdir -v -p ~/.local/share/godot/export_templates/ ~/.config/
+          if [ ! -d ~/.config/godot ]; then cp -r /root/.config/godot ~/.config/godot; fi
+          if [ ! -d ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable ]; then
+            cp -r /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          fi
+      - name: Імпорт ресурсів
+        run: godot --headless --import || true
+      - name: Збирання APK
+        run: |
+          mkdir -v -p build
+          godot --headless --verbose --export-debug "Android" build/syaivo-kameniv.apk
+          ls -la build
+          test -s build/syaivo-kameniv.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: syaivo-kameniv-android
+          path: build/syaivo-kameniv.apk
+
+  windows:
+    name: Версія для Windows
+    needs: tests
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.4.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Шаблони експорту
+        run: |
+          mkdir -v -p ~/.local/share/godot/export_templates/
+          if [ ! -d ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable ]; then
+            cp -r /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          fi
+      - name: Імпорт ресурсів
+        run: godot --headless --import || true
+      - name: Збирання
+        run: |
+          mkdir -v -p build
+          godot --headless --verbose --export-debug "Windows Desktop" build/syaivo-kameniv.exe
+          test -s build/syaivo-kameniv.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: syaivo-kameniv-windows
+          path: build/syaivo-kameniv.exe
