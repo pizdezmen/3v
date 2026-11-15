@@ -24,6 +24,7 @@ var _auto_rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_build.call_deferred()
 
 
@@ -53,6 +54,7 @@ func _build() -> void:
 	_moves_label.size = Vector2(209, 112)
 	_panel.add_child(_moves_label)
 	_goals_box = Control.new()
+	_goals_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_goals_box.position = Vector2(28, 52)
 	_goals_box.size = Vector2(430, 100)
 	_panel.add_child(_goals_box)
@@ -90,6 +92,9 @@ func _load_level() -> void:
 
 
 func _process(_delta: float) -> void:
+	if board != null:
+		# поки відкрите вікно або рівень завершено, поле не реагує на дотики
+		view.input_enabled = not _finished and not is_instance_valid(_dialog)
 	if autoplay and board != null and view.input_enabled and not view.busy and not is_instance_valid(_dialog):
 		var m := Bot.pick_move(board, _auto_rng)
 		if not m.is_empty():
