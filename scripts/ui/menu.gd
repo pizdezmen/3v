@@ -13,7 +13,7 @@ func _ready() -> void:
 	add_child(col)
 
 	var t1 := Art.label("Сяйво", 132)
-	var t2 := Art.label("каменів", 104, Art.LILAC)
+	var t2 := Art.label("камень", 104, Art.LILAC)
 	col.add_child(t1)
 	col.add_child(t2)
 

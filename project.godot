@@ -3,7 +3,7 @@ config_version=5
 
 [application]
 
-config/name="Сяйво каменів"
+config/name="Сяйво камень"
 config/description="Фентезі-гра три в ряд"
 config/version="0.1.0"
 run/main_scene="res://scenes/main.tscn"
