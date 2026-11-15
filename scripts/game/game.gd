@@ -21,6 +21,7 @@ var _finished := false
 var _gear: Widgets.Gear
 var autoplay := false    # демонстрація: рівень проходить бот
 var _auto_rng := RandomNumberGenerator.new()
+var _auto_frame := 0
 
 
 func _ready() -> void:
@@ -94,8 +95,11 @@ func _load_level() -> void:
 func _process(_delta: float) -> void:
 	if board != null:
 		# поки відкрите вікно або рівень завершено, поле не реагує на дотики
-		view.input_enabled = not _finished and not is_instance_valid(_dialog)
-	if autoplay and board != null and view.input_enabled and not view.busy and not is_instance_valid(_dialog):
+		view.input_enabled = not _finished and not is_instance_valid(_dialog) \
+				and board.moves_left > 0 and not board.is_won()
+	_auto_frame += 1
+	var rush: bool = autoplay and "rush" in OS.get_cmdline_user_args() and _auto_frame % 7 == 0
+	if autoplay and board != null and view.input_enabled and (rush or not view.is_busy()) and not is_instance_valid(_dialog):
 		var m := Bot.pick_move(board, _auto_rng)
 		if not m.is_empty():
 			if m["a"] == m["b"]:
@@ -198,6 +202,9 @@ func _on_move_started() -> void:
 func _on_move_finished() -> void:
 	if _finished:
 		return
+	if autoplay:
+		var bad := view.debug_mismatches()
+		print("settled: moves_left=%d mismatches=%d" % [board.moves_left, bad])
 	for key in _goal_nodes:
 		# про всяк випадок зводимо лічильники з логікою
 		while _goal_nodes[key]["shown"] > board.goals.get(key, 0):

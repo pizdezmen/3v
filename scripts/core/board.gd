@@ -812,8 +812,20 @@ func _combo_kind(ka: int, kb: int) -> Dictionary:
 	return {"kind": C_BIG_CROSS}
 
 
-## Обмін двох сусідніх клітинок. Порожній список = хід неможливий.
+## Обмін двох сусідніх клітинок із повним розв'язанням ходу (для бота й тестів).
+## Порожній список = хід неможливий.
 func play_swap(a: int, b: int) -> Array:
+	var steps := begin_swap(a, b)
+	if steps.is_empty() or not steps[0]["ok"]:
+		return steps
+	_settle(steps)
+	_after_move(steps)
+	return steps
+
+
+## Лише сам обмін і перше очищення. Далі поле доводять step_gravity і step_matches:
+## так екран може приймати нові ходи, поки камені ще падають.
+func begin_swap(a: int, b: int) -> Array:
 	if not can_swap(a, b):
 		return []
 	var pa: Dictionary = pieces[a]
@@ -839,11 +851,11 @@ func play_swap(a: int, b: int) -> Array:
 		var item := {"t": 0.0, "idx": bi, "kind": bp["kind"]}
 		if bp["kind"] == Kind.STAR:
 			item["color"] = pieces[ni]["color"]
-		groups = _find_groups()
+		groups = _groups_with(a, b)
 		_remove_piece(bi, 0.0)
 		_queue.append(item)
 	else:
-		groups = _find_groups()
+		groups = _groups_with(a, b)
 		if groups.is_empty():
 			pieces[a] = pa
 			pieces[b] = pb
@@ -853,13 +865,30 @@ func play_swap(a: int, b: int) -> Array:
 	_apply_groups(groups, [b, a], horizontal)
 	_run_queue()
 	steps.append(_end_step())
+	return steps
+
+
+## Збіги, до яких належить хоча б одна з двох клітинок ходу.
+func _groups_with(a: int, b: int) -> Array:
+	var res: Array = []
+	for g in _find_groups():
+		if g["set"].has(a) or g["set"].has(b):
+			res.append(g)
+	return res
+
+
+## Натиск на бустер із повним розв'язанням ходу.
+func play_tap(i: int) -> Array:
+	var steps := begin_tap(i)
+	if steps.is_empty():
+		return steps
 	_settle(steps)
 	_after_move(steps)
 	return steps
 
 
-## Натиск на бустер: спрацьовує на місці.
-func play_tap(i: int) -> Array:
+## Лише спрацювання бустера на місці.
+func begin_tap(i: int) -> Array:
 	if not _swappable(i) or pieces[i]["kind"] == Kind.NORMAL:
 		return []
 	var kind: int = pieces[i]["kind"]
@@ -868,10 +897,30 @@ func play_tap(i: int) -> Array:
 	_queue.append({"t": 0.0, "idx": i, "kind": kind})
 	moves_left -= 1
 	_run_queue()
-	var steps: Array = [_end_step()]
-	_settle(steps)
-	_after_move(steps)
-	return steps
+	return [_end_step()]
+
+
+## Один крок падіння. Порожній список moves = падати нічому.
+func step_gravity() -> Dictionary:
+	return _gravity()
+
+
+## Один крок очищення збігів, що утворилися самі. Порожній словник = збігів немає.
+func step_matches() -> Dictionary:
+	var groups := _find_groups()
+	if groups.is_empty():
+		return {}
+	_begin_step()
+	_apply_groups(groups, [], false)
+	_run_queue()
+	return _end_step()
+
+
+## Перемішування, якщо ходів не лишилось. Порожній словник = не потрібне.
+func step_shuffle() -> Dictionary:
+	if is_won() or moves_left <= 0 or not find_moves().is_empty():
+		return {}
+	return _shuffle()
 
 
 func _settle(steps: Array) -> void:

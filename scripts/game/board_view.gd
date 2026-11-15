@@ -6,7 +6,7 @@ signal move_started
 signal move_finished
 signal goal_progress(key: String)
 
-const HOP := 0.062          # секунд на одну клітинку падіння
+const HOP := 0.089          # секунд на одну клітинку падіння
 const PIECE_SCALE := 0.92
 
 var board: Board
@@ -31,6 +31,11 @@ var _idle := 0.0
 var _hint_tweens: Array = []
 var _frame_box: StyleBoxFlat
 var _base_pos := Vector2.ZERO
+var _clock := 0.0
+var _pending := false      # поле ще осідає: попереду падіння або збіги
+var _step_until := 0.0     # до цього часу наступний крок осідання чекає
+var _busy_until := {}      # id каменя -> час, до якого він рухається
+var _dead := {}            # id каменів, прибраних до появи на екрані
 
 
 func _ready() -> void:
@@ -62,6 +67,10 @@ func show_board(b: Board, area: Rect2) -> void:
 		for c in layer.get_children():
 			c.queue_free()
 	_nodes.clear()
+	_busy_until.clear()
+	_dead.clear()
+	_pending = false
+	_step_until = 0.0
 	_crates.clear()
 	_ices.clear()
 	_chains.clear()
@@ -177,6 +186,55 @@ func _unhandled_input(event: InputEvent) -> void:
 				_try_swap(from, target)
 
 
+## Перевірка для тестів: чи збігається намальоване з логікою, коли поле осіло.
+func debug_mismatches() -> int:
+	var bad := 0
+	var seen := {}
+	for i in board.w * board.h:
+		var p = board.pieces[i]
+		if p == null:
+			continue
+		seen[p["id"]] = true
+		var n: Node2D = _nodes.get(p["id"])
+		if n == null or n.position.distance_to(center(i)) > 1.0 or n.get_meta("kind") != p["kind"]:
+			bad += 1
+			if OS.is_debug_build():
+				print("  mismatch cell ", i, " piece ", p, " node ", n, " pos ", n.position if n else null, " want ", center(i), " meta ", n.get_meta("kind") if n else null, " busy ", _busy_until.get(p["id"], 0.0) - _clock)
+	for id in _nodes:
+		if not seen.has(id):
+			bad += 1
+			if OS.is_debug_build():
+				print("  extra node ", id, " at ", _nodes[id].position)
+	for i in _crates:
+		if board.crate[i] == 0:
+			bad += 1
+	for i in _ices:
+		if board.ice[i] == 0:
+			bad += 1
+	for i in _chains:
+		if board.chain[i] == 0:
+			bad += 1
+	return bad
+
+
+## Чи відбувається щось на полі (осідання або салют).
+func is_busy() -> bool:
+	return busy or _pending
+
+
+func _idle_piece(i: int) -> bool:
+	var p = board.pieces[i]
+	return p != null and _nodes.has(p["id"]) and _clock >= _busy_until.get(p["id"], 0.0)
+
+
+func _mark_busy(id: int, dur: float) -> void:
+	_busy_until[id] = max(_busy_until.get(id, 0.0), _clock + dur)
+
+
+func _hold(dur: float) -> void:
+	_step_until = max(_step_until, _clock + dur)
+
+
 func _tap(i: int) -> void:
 	if busy:
 		return
@@ -188,9 +246,15 @@ func _tap(i: int) -> void:
 	var p = board.pieces[i]
 	if p != null and p["kind"] != Board.Kind.NORMAL and board._swappable(i):
 		_select(-1)
-		var steps := board.play_tap(i)
+		if not _idle_piece(i):
+			return
+		var steps := board.begin_tap(i)
 		if not steps.is_empty():
-			_run(steps)
+			_touch()
+			_pending = true
+			_hold(steps[0]["dur"] + 0.24)
+			move_started.emit()
+			_start_clear(steps[0], 0.0)
 		return
 	if p != null and board._swappable(i) and _selected != i:
 		_select(i)
@@ -207,15 +271,33 @@ func _select(i: int) -> void:
 		_sel_mark.position = center(i)
 
 
+## Хід приймається будь-коли: і під час падіння, і під час вибухів.
+## Не можна рухати лише той камінь, який сам зараз летить.
 func _try_swap(a: int, b: int) -> void:
 	if busy:
 		return
-	var steps := board.play_swap(a, b)
-	if steps.is_empty():
+	if not board.can_swap(a, b):
 		Sfx.play("bad")
-		_shake_piece(a)
+		if board.pieces[a] != null and _idle_piece(a):
+			_shake_piece(a)
 		return
-	_run(steps)
+	if not (_idle_piece(a) and _idle_piece(b)):
+		return
+	var steps := board.begin_swap(a, b)
+	if steps.is_empty():
+		return
+	_touch()
+	var s: Dictionary = steps[0]
+	var swap_time := 0.14 if s["ok"] else 0.3
+	_mark_busy(s["ida"], swap_time)
+	_mark_busy(s["idb"], swap_time)
+	_hold(swap_time)
+	_start_swap(s)
+	if s["ok"]:
+		_pending = true
+		_hold(0.14 + steps[1]["dur"] + 0.24)
+		move_started.emit()
+		_start_clear(steps[1], 0.14)
 
 
 func _shake_piece(i: int) -> void:
@@ -224,7 +306,7 @@ func _shake_piece(i: int) -> void:
 		return
 	var n: Node2D = _nodes[p["id"]]
 	var c := center(i)
-	var tw := create_tween()
+	var tw := n.create_tween()
 	tw.tween_property(n, "position", c + Vector2(6, 0), 0.04)
 	tw.tween_property(n, "position", c - Vector2(6, 0), 0.06)
 	tw.tween_property(n, "position", c, 0.04)
@@ -232,28 +314,41 @@ func _shake_piece(i: int) -> void:
 
 # ---------------------------------------------------------------- програвання кроків
 
-func _run(steps: Array) -> void:
-	busy = true
+## Наступний крок осідання: падіння, потім збіги, потім перевірка ходів.
+func _advance() -> void:
+	var fall := board.step_gravity()
+	if not fall["moves"].is_empty():
+		_start_fall(fall)
+		_hold(fall["ticks"] * HOP + 0.07)
+		return
+	var clear := board.step_matches()
+	if not clear.is_empty():
+		_start_clear(clear, 0.0)
+		_hold(clear["dur"] + 0.24)
+		return
+	var shuffle := board.step_shuffle()
+	if not shuffle.is_empty():
+		for m in shuffle["moves"]:
+			_mark_busy(m["id"], 0.6)
+		_anim_shuffle(shuffle)
+		if shuffle["ok"]:
+			_hold(0.6)
+			return
+	_pending = false
 	cascade = 0
-	_touch()
-	var real_move: bool = not (steps.size() == 1 and steps[0]["type"] == "swap")
-	if real_move:
-		move_started.emit()
-	await play_steps(steps)
-	busy = false
-	if real_move:
-		move_finished.emit()
+	move_finished.emit()
 
 
+## Послідовне програвання готових кроків (фінальний салют).
 func play_steps(steps: Array) -> void:
 	for s in steps:
 		match s["type"]:
-			"swap":
-				await _anim_swap(s)
 			"clear":
-				await _anim_clear(s)
+				_start_clear(s, 0.0)
+				await _wait(s["dur"] + 0.24)
 			"fall":
-				await _anim_fall(s)
+				_start_fall(s)
+				await _wait(s["ticks"] * HOP + 0.07)
 			"shuffle":
 				await _anim_shuffle(s)
 			"finale":
@@ -271,49 +366,40 @@ func _at(t: float, c: Callable) -> void:
 		create_tween().tween_callback(c).set_delay(t)
 
 
-func _anim_swap(s: Dictionary) -> void:
-	var na: Node2D = _nodes.get(s["ida"])
-	var nb: Node2D = _nodes.get(s["idb"])
+func _start_swap(s: Dictionary) -> void:
 	var pa := center(s["a"])
 	var pb := center(s["b"])
 	Sfx.play("swap")
-	var tw := create_tween().set_parallel(true).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	if na:
-		na.z_index = 1
-		tw.tween_property(na, "position", pb, 0.14)
-	if nb:
-		tw.tween_property(nb, "position", pa, 0.14)
-	await tw.finished
+	var pairs := [[_nodes.get(s["ida"]), pa, pb], [_nodes.get(s["idb"]), pb, pa]]
+	for pair in pairs:
+		var n: Node2D = pair[0]
+		if n == null:
+			continue
+		var tw := n.create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tw.tween_property(n, "position", pair[2], 0.14)
+		if not s["ok"]:
+			tw.tween_property(n, "position", pair[1], 0.14)
 	if not s["ok"]:
-		Sfx.play("bad")
-		var back := create_tween().set_parallel(true).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		if na:
-			back.tween_property(na, "position", pa, 0.14)
-		if nb:
-			back.tween_property(nb, "position", pb, 0.14)
-		await back.finished
-	if na:
-		na.z_index = 0
+		create_tween().tween_callback(Sfx.play.bind("bad")).set_delay(0.14)
 
 
-func _anim_clear(s: Dictionary) -> void:
+func _start_clear(s: Dictionary, offset: float) -> void:
 	cascade += 1
 	var any_match := false
 	for e in s["removed"]:
-		_at(e["t"], _remove_node.bind(e))
+		_at(offset + e["t"], _remove_node.bind(e))
 		if e["to"] >= 0:
 			any_match = true
 	if any_match:
-		Sfx.play("match", min(1.0 + (cascade - 1) * 0.12, 2.0))
+		_at(offset, Sfx.play.bind("match", min(1.0 + (cascade - 1) * 0.12, 2.0)))
 	for e in s["blockers"]:
-		_at(e["t"], _blocker_event.bind(e))
+		_at(offset + e["t"], _blocker_event.bind(e))
 	for e in s["created"]:
-		_at(e["t"] + 0.1, _create_event.bind(e))
+		_at(offset + e["t"] + 0.1, _create_event.bind(e))
 	for e in s["transformed"]:
-		_at(e["t"], _transform_event.bind(e))
+		_at(offset + e["t"], _transform_event.bind(e))
 	for e in s["fx"]:
-		_at(e["t"], _fx_event.bind(e))
-	await _wait(s["dur"] + 0.24)
+		_at(offset + e["t"], _fx_event.bind(e))
 
 
 func _remove_node(e: Dictionary) -> void:
@@ -321,9 +407,12 @@ func _remove_node(e: Dictionary) -> void:
 		goal_progress.emit(e["goal"])
 	var n: Node2D = _nodes.get(e["id"])
 	if n == null:
+		# камінь зник раніше, ніж устиг з'явитися на екрані (бустер одразу підірвали)
+		_dead[e["id"]] = true
 		return
 	_nodes.erase(e["id"])
-	var tw := create_tween()
+	_busy_until.erase(e["id"])
+	var tw := n.create_tween()
 	var sp: Sprite2D = n.get_meta("sp")
 	if e["to"] >= 0 and e["to"] != e["idx"]:
 		tw.set_parallel(true)
@@ -387,23 +476,26 @@ func _blocker_event(e: Dictionary) -> void:
 
 func _pop(s: Node2D) -> void:
 	var base := s.scale
-	var tw := create_tween()
+	var tw := s.create_tween()
 	tw.tween_property(s, "scale", base * 1.12, 0.06)
 	tw.tween_property(s, "scale", base, 0.1)
 
 
 func _vanish(s: Node2D) -> void:
-	var tw := create_tween().set_parallel(true)
+	var tw := s.create_tween().set_parallel(true)
 	tw.tween_property(s, "scale", s.scale * 1.25, 0.16)
 	tw.tween_property(s, "modulate:a", 0.0, 0.16)
 	tw.chain().tween_callback(s.queue_free)
 
 
 func _create_event(e: Dictionary) -> void:
+	if _dead.has(e["id"]):
+		_dead.erase(e["id"])
+		return
 	Sfx.play("create")
 	var n := _make_piece(e["id"], e["kind"], -1, center(e["idx"]))
 	n.scale = Vector2.ONE * 0.2
-	var tw := create_tween()
+	var tw := n.create_tween()
 	tw.tween_property(n, "scale", Vector2.ONE * 1.25, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(n, "scale", Vector2.ONE, 0.1)
 	_ring(center(e["idx"]), cell * 1.6, Color(1, 1, 1, 0.5), 0.25)
@@ -415,28 +507,27 @@ func _transform_event(e: Dictionary) -> void:
 		return
 	_set_look(n, e["kind"], -1)
 	n.scale = Vector2.ONE * 0.5
-	var tw := create_tween()
+	var tw := n.create_tween()
 	tw.tween_property(n, "scale", Vector2.ONE * 1.2, 0.1)
 	tw.tween_property(n, "scale", Vector2.ONE, 0.08)
 
 
-func _anim_fall(s: Dictionary) -> void:
+func _start_fall(s: Dictionary) -> void:
 	for m in s["moves"]:
 		var path: Array = m["path"]
 		var n: Node2D = _nodes.get(m["id"])
-		var tw := create_tween()
 		var t := 0
 		if n == null:
 			n = _make_piece(m["id"], m["kind"], m["color"], center(path[0][0]) - Vector2(0, cell))
 			n.modulate.a = 0.0
+			var tw0 := n.create_tween()
 			var first_tick: int = path[0][1]
 			if first_tick > 0:
-				tw.tween_interval(first_tick * HOP)
+				tw0.tween_interval(first_tick * HOP)
 				t = first_tick
-			tw.tween_property(n, "modulate:a", 1.0, HOP * 0.6)
-			tw.parallel().tween_property(n, "position", center(path[0][0]), HOP)
-			t += 1
-			path = path.slice(1)
+			tw0.tween_property(n, "modulate:a", 1.0, HOP * 0.6)
+		var tw := n.create_tween()
+		t = 0
 		for step in path:
 			var tick: int = step[1]
 			if tick > t:
@@ -447,8 +538,8 @@ func _anim_fall(s: Dictionary) -> void:
 		var base: Vector2 = Vector2.ONE * cell * PIECE_SCALE / sp.texture.get_width()
 		tw.tween_property(sp, "scale", base * Vector2(1.08, 0.9), 0.05)
 		tw.tween_property(sp, "scale", base, 0.09)
+		_mark_busy(m["id"], t * HOP + 0.05)
 	Sfx.play("land", 1.0, -4.0)
-	await _wait(s["ticks"] * HOP + 0.07)
 
 
 func _anim_shuffle(s: Dictionary) -> void:
@@ -629,7 +720,12 @@ func _touch() -> void:
 
 
 func _process(delta: float) -> void:
-	if board == null or busy or not input_enabled:
+	if board == null:
+		return
+	_clock += delta
+	if _pending and not busy and _clock >= _step_until:
+		_advance()
+	if busy or _pending or not input_enabled:
 		return
 	_idle += delta
 	if _idle > 5.0 and _hint_tweens.is_empty():
@@ -653,7 +749,7 @@ func _show_hint() -> void:
 		if n.has_meta("hint"):
 			continue
 		n.set_meta("hint", true)
-		var tw := create_tween().set_loops()
+		var tw := n.create_tween().set_loops()
 		tw.tween_property(n, "scale", Vector2.ONE * 1.13, 0.32).set_trans(Tween.TRANS_SINE)
 		tw.tween_property(n, "scale", Vector2.ONE, 0.32).set_trans(Tween.TRANS_SINE)
 		tw.tween_interval(0.25)
