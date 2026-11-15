@@ -8,6 +8,8 @@ signal goal_progress(key: String)
 
 const HOP := 0.089          # секунд на одну клітинку падіння
 const PIECE_SCALE := 0.92
+const BOUNCE := 0.09        # висота відскоку після падіння, у частках клітинки
+const LAND_TIME := 0.22     # присідання і відскок після приземлення
 
 var board: Board
 var cell := 76.0
@@ -319,7 +321,7 @@ func _advance() -> void:
 	var fall := board.step_gravity()
 	if not fall["moves"].is_empty():
 		_start_fall(fall)
-		_hold(fall["ticks"] * HOP + 0.07)
+		_hold(fall["ticks"] * HOP + LAND_TIME)
 		return
 	var clear := board.step_matches()
 	if not clear.is_empty():
@@ -348,7 +350,7 @@ func play_steps(steps: Array) -> void:
 				await _wait(s["dur"] + 0.24)
 			"fall":
 				_start_fall(s)
-				await _wait(s["ticks"] * HOP + 0.07)
+				await _wait(s["ticks"] * HOP + LAND_TIME)
 			"shuffle":
 				await _anim_shuffle(s)
 			"finale":
@@ -426,11 +428,18 @@ func _remove_node(e: Dictionary) -> void:
 		tw.tween_property(n, "scale", Vector2.ONE * 0.2, 0.13).set_delay(0.05)
 		tw.tween_property(n, "modulate:a", 0.0, 0.13).set_delay(0.05)
 		tw.chain().tween_callback(n.queue_free)
-	var color := Color.WHITE
+	# камені, що зливаються в бустер, уламків не дають
+	if e["to"] >= 0:
+		return
+	var color: Color = Art.VIOLET
 	if e["color"] >= 0:
-		color = Art.PIECE_COLORS[e["color"]].lightened(0.25)
-	else:
-		color = Art.VIOLET.lightened(0.3)
+		color = Art.PIECE_COLORS[e["color"]]
+	elif e["kind"] == Board.Kind.BOMB:
+		color = Art.GOLD
+	elif e["kind"] == Board.Kind.SHUR:
+		color = Color("#e3e9f6")
+	elif e["kind"] == Board.Kind.STAR:
+		color = Color.WHITE
 	_burst(center(e["idx"]), color, 7)
 	if sp == null:
 		return
@@ -536,9 +545,14 @@ func _start_fall(s: Dictionary) -> void:
 			t = tick + 1
 		var sp: Sprite2D = n.get_meta("sp")
 		var base: Vector2 = Vector2.ONE * cell * PIECE_SCALE / sp.texture.get_width()
-		tw.tween_property(sp, "scale", base * Vector2(1.08, 0.9), 0.05)
-		tw.tween_property(sp, "scale", base, 0.09)
-		_mark_busy(m["id"], t * HOP + 0.05)
+		# приземлення: камінь трохи присідає і легко відскакує
+		var rest := center(path[path.size() - 1][0])
+		tw.tween_property(sp, "scale", base * Vector2(1.1, 0.88), 0.05)
+		tw.tween_property(sp, "scale", base, 0.07)
+		tw.parallel().tween_property(n, "position", rest - Vector2(0, cell * BOUNCE), 0.08) \
+				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(n, "position", rest, 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		_mark_busy(m["id"], t * HOP + LAND_TIME)
 	Sfx.play("land", 1.0, -4.0)
 
 
