@@ -433,12 +433,9 @@ func _start_swap(s: Dictionary) -> void:
 
 func _start_clear(s: Dictionary, offset: float) -> void:
 	cascade += 1
-	var any_match := false
 	for e in s["removed"]:
 		_at(offset + e["t"], _remove_node.bind(e))
-		if e["to"] >= 0:
-			any_match = true
-	if any_match:
+	if s.get("matched", false):
 		# кожен наступний збіг каскаду звучить на сходинку гами вище
 		_at(offset, Sfx.play.bind("match", pow(2.0, CASCADE_SCALE[mini(cascade - 1, CASCADE_SCALE.size() - 1)] / 12.0)))
 	for e in s["blockers"]:

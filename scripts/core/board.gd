@@ -31,6 +31,7 @@ var moves_total := 0
 var rng := RandomNumberGenerator.new()
 
 var _next_id := 1
+var _matched := false   # у цьому кроці зібрався збіг каменів (для звуку)
 var _rm: Array = []
 var _bl: Array = []
 var _cr: Array = []
@@ -406,6 +407,7 @@ func _begin_step() -> void:
 	_queue = []
 	_protected = {}
 	_targeted = {}
+	_matched = false
 
 
 func _end_step() -> Dictionary:
@@ -417,7 +419,7 @@ func _end_step() -> Dictionary:
 	for e in _fx:
 		dur = max(dur, e["t"] + e.get("dur", 0.0))
 	return {"type": "clear", "removed": _rm, "blockers": _bl, "created": _cr,
-			"fx": _fx, "transformed": _tr, "dur": dur}
+			"fx": _fx, "transformed": _tr, "dur": dur, "matched": _matched}
 
 
 func _step_empty() -> bool:
@@ -457,6 +459,8 @@ func _remove_piece(i: int, t: float, to: int = -1) -> void:
 
 
 func _apply_groups(groups: Array, swap_cells: Array, horizontal_swap: bool) -> void:
+	if not groups.is_empty():
+		_matched = true
 	for g in groups:
 		var kind := _group_kind(g, horizontal_swap, not swap_cells.is_empty())
 		var spawn := -1
