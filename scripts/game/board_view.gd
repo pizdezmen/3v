@@ -37,6 +37,7 @@ var _shadow_layer: Node2D
 var _live_cache: Array = []
 var _live_frame := -1
 var _white: ShaderMaterial
+const CASCADE_SCALE := [0, 2, 4, 7, 9, 12, 14, 16, 19, 21]   # мажорна пентатоніка в півтонах
 var _dim_box: StyleBoxFlat
 var _cell_boxes := {}
 var _base_pos := Vector2.ZERO
@@ -438,7 +439,8 @@ func _start_clear(s: Dictionary, offset: float) -> void:
 		if e["to"] >= 0:
 			any_match = true
 	if any_match:
-		_at(offset, Sfx.play.bind("match", min(1.0 + (cascade - 1) * 0.12, 2.0)))
+		# кожен наступний збіг каскаду звучить на сходинку гами вище
+		_at(offset, Sfx.play.bind("match", pow(2.0, CASCADE_SCALE[mini(cascade - 1, CASCADE_SCALE.size() - 1)] / 12.0)))
 	for e in s["blockers"]:
 		_at(offset + e["t"], _blocker_event.bind(e))
 	if not s["created"].is_empty():
