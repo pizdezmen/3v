@@ -31,15 +31,14 @@ var _press_pos := Vector2.ZERO
 var _selected := -1
 var _idle := 0.0
 var _hint_tweens: Array = []
-var _frame_box: StyleBoxFlat
 var _shards: Shards
 var _birth: BirthFx
 var _shadow_layer: Node2D
-var _corner: Texture2D
 var _live_cache: Array = []
 var _live_frame := -1
 var _white: ShaderMaterial
 var _dim_box: StyleBoxFlat
+var _cell_boxes := {}
 var _base_pos := Vector2.ZERO
 var _clock := 0.0
 var _pending := false      # поле ще осідає: попереду падіння або збіги
@@ -72,16 +71,6 @@ func _ready() -> void:
 	sh.code = "shader_type canvas_item;\nvoid fragment() { COLOR = vec4(1.0, 1.0, 1.0, texture(TEXTURE, UV).a * COLOR.a); }"
 	_white = ShaderMaterial.new()
 	_white.shader = sh
-	var ci := Image.create(64, 64, false, Image.FORMAT_RGBA8)
-	for y in 64:
-		for x in 64:
-			var dd := Vector2(x + 0.5 - 32.0, y + 0.5 - 32.0).length()
-			ci.set_pixel(x, y, Color(1, 1, 1, clampf(31.5 - dd, 0.0, 1.0)))
-	_corner = ImageTexture.create_from_image(ci)
-	_frame_box = StyleBoxFlat.new()
-	_frame_box.bg_color = Art.FRAME
-	_frame_box.set_corner_radius_all(20)
-	_frame_box.anti_aliasing = true
 	_dim_box = StyleBoxFlat.new()
 	_dim_box.bg_color = Color(5 / 255.0, 4 / 255.0, 16 / 255.0, 0.6)
 	_dim_box.set_corner_radius_all(36)
@@ -170,32 +159,39 @@ func _draw() -> void:
 		return
 	# затемнення під полем, щоб живе небо не сперечалося з каменями
 	draw_style_box(_dim_box, Rect2(Vector2(-28, -28), Vector2(board.w, board.h) * cell + Vector2(56, 56)))
-	# рамка поля: прості прямокутники й круглі зовнішні кути (малюються двома викликами на все поле)
-	var m := 13.0
-	var rounds: Array = []
+	# поле без рамки: клітинки лежать просто на затемненні, зовнішні кути закруглені
 	for i in board.w * board.h:
 		if board.playable[i] != 1:
 			continue
-		var o := Vector2(i % board.w, i / board.w) * cell
-		draw_rect(Rect2(o - Vector2(m, 0), Vector2(cell + m * 2.0, cell)), Art.FRAME)
-		draw_rect(Rect2(o - Vector2(0, m), Vector2(cell, cell + m * 2.0)), Art.FRAME)
-		for dx in [-1, 1]:
-			for dy in [-1, 1]:
-				var cx := i % board.w
-				var cy := i / board.w
-				var corner := o + Vector2(cell if dx > 0 else 0.0, cell if dy > 0 else 0.0)
-				if _play(cx + dx, cy) or _play(cx, cy + dy) or _play(cx + dx, cy + dy):
-					draw_rect(Rect2(corner + Vector2(-m if dx < 0 else 0.0, -m if dy < 0 else 0.0), Vector2(m, m)), Art.FRAME)
-				else:
-					rounds.append(corner)
-	for corner in rounds:
-		draw_texture_rect(_corner, Rect2(corner - Vector2(m, m), Vector2(m, m) * 2.0), false, Art.FRAME)
-	for i in board.w * board.h:
-		if board.playable[i] == 1:
-			var x := i % board.w
-			var y := i / board.w
-			draw_rect(Rect2(Vector2(x, y) * cell - Vector2(0.3, 0.3), Vector2(cell + 0.6, cell + 0.6)),
-					Art.CELL_B if (x + y) % 2 == 1 else Art.CELL_A)
+		var x := i % board.w
+		var y := i / board.w
+		var col: Color = Art.CELL_B if (x + y) % 2 == 1 else Art.CELL_A
+		var r := Rect2(Vector2(x, y) * cell - Vector2(0.3, 0.3), Vector2(cell + 0.6, cell + 0.6))
+		var mask := 0
+		var bit := 1
+		for d in [Vector2i(-1, -1), Vector2i(1, -1), Vector2i(1, 1), Vector2i(-1, 1)]:
+			if not (_play(x + d.x, y) or _play(x, y + d.y) or _play(x + d.x, y + d.y)):
+				mask |= bit
+			bit <<= 1
+		if mask == 0:
+			draw_rect(r, col)
+		else:
+			draw_style_box(_cell_box(mask, col), r)
+
+
+func _cell_box(mask: int, col: Color) -> StyleBoxFlat:
+	var key := mask + (16 if col == Art.CELL_B else 0)
+	if not _cell_boxes.has(key):
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = col
+		sb.anti_aliasing = true
+		var rad := 22
+		sb.corner_radius_top_left = rad if mask & 1 else 0
+		sb.corner_radius_top_right = rad if mask & 2 else 0
+		sb.corner_radius_bottom_right = rad if mask & 4 else 0
+		sb.corner_radius_bottom_left = rad if mask & 8 else 0
+		_cell_boxes[key] = sb
+	return _cell_boxes[key]
 
 
 # ---------------------------------------------------------------- введення

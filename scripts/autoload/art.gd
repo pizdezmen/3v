@@ -40,11 +40,8 @@ func _ready() -> void:
 	var sheet := Image.create(step * 4, step * 4, false, Image.FORMAT_RGBA8)
 	var slots: Array = []
 	for i in names.size():
-		# камені й бустери намальовано зі світінням і збережено як PNG, перешкоди лишаються SVG
-		var path := "res://assets/art/%s.png" % names[i]
-		if not ResourceLoader.exists(path):
-			path = "res://assets/art/%s.svg" % names[i]
-		var img: Image = (load(path) as Texture2D).get_image()
+		# малюнки зі світінням зберігаються як PNG (вихідні SVG лежать у art_src)
+		var img: Image = (load("res://assets/art/%s.png" % names[i]) as Texture2D).get_image()
 		if img.is_compressed():
 			img.decompress()
 		img.convert(Image.FORMAT_RGBA8)
@@ -125,6 +122,18 @@ func label(text: String, size: int, color: Color = Color.WHITE, bold: bool = tru
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	return l
+
+
+## Панель «серпанок»: напівпрозора, без рамки, з м'якою тінню.
+func mist(radius: int = 36) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(44 / 255.0, 40 / 255.0, 86 / 255.0, 0.68)
+	sb.set_corner_radius_all(radius)
+	sb.anti_aliasing = true
+	sb.shadow_color = Color(0, 0, 0, 0.3)
+	sb.shadow_size = 22
+	sb.shadow_offset = Vector2(0, 6)
+	return sb
 
 
 func box(fill: Color, radius: int = 36, border: Color = FRAME, border_w: int = 5) -> StyleBoxFlat:

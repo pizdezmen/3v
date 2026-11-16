@@ -39,8 +39,10 @@ class Gear extends Button:
 
 	func _draw() -> void:
 		var c := size / 2.0
-		draw_circle(c, 48, Art.FRAME)
-		draw_circle(c, 43, Art.CELL_A if not button_pressed else Art.CELL_B)
+		# «серпанок»: напівпрозоре коло без рамки з м'якою тінню
+		draw_texture_rect(Art.dot, Rect2(c - Vector2(62, 56), Vector2(124, 124)), false, Color(0, 0, 0, 0.45))
+		var fill := Color(44 / 255.0, 40 / 255.0, 86 / 255.0, 0.68 if not button_pressed else 0.9)
+		draw_circle(c, 46, fill, true, -1.0, true)
 		var pts := PackedVector2Array()
 		for k in 16:
 			var r := 31.0 if k % 2 == 0 else 22.0
@@ -48,7 +50,7 @@ class Gear extends Button:
 			pts.append(c + Vector2(cos(a), sin(a)) * r)
 		draw_colored_polygon(pts, Art.LILAC)
 		draw_circle(c, 22, Art.LILAC)
-		draw_circle(c, 10, Art.CELL_A)
+		draw_circle(c, 10, Color(44 / 255.0, 40 / 255.0, 86 / 255.0))
 
 
 class Check extends Control:

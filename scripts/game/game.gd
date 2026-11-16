@@ -36,15 +36,15 @@ func _build() -> void:
 	var x0 := (size.x - CONTENT_W) / 2.0
 	var top: float = 34.0 + (main.safe_top() if main else 0.0)
 	_panel = Panel.new()
-	_panel.add_theme_stylebox_override("panel", Art.box(Art.PANEL, 36))
+	_panel.add_theme_stylebox_override("panel", Art.mist(36))
 	_panel.position = Vector2(x0 + 22, top)
 	_panel.size = Vector2(676, 170)
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_panel)
 	var divider := ColorRect.new()
-	divider.color = Art.FRAME
-	divider.position = Vector2(462, 24)
-	divider.size = Vector2(5, 122)
+	divider.color = Color(Art.LABEL, 0.3)
+	divider.position = Vector2(463, 24)
+	divider.size = Vector2(3, 122)
 	_panel.add_child(divider)
 	var goals_title := Art.label("ЦІЛІ", 24, Art.LABEL)
 	goals_title.position = Vector2(34, 14)

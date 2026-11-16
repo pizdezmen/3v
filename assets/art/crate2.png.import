@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ddsl10rbgnbhh"
-path="res://.godot/imported/crate1.svg-8a41e95bd1b752be6be298cdbe4d72d6.ctex"
+uid="uid://1qibno77p8rx"
+path="res://.godot/imported/crate2.png-dfb9885748bf9d7c14dd5b51431fcf09.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/crate1.svg"
-dest_files=["res://.godot/imported/crate1.svg-8a41e95bd1b752be6be298cdbe4d72d6.ctex"]
+source_file="res://assets/art/crate2.png"
+dest_files=["res://.godot/imported/crate2.png-dfb9885748bf9d7c14dd5b51431fcf09.ctex"]
 
 [params]
 
@@ -32,6 +32,3 @@ process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
-svg/scale=1.0
-editor/scale_with_editor_scale=false
-editor/convert_colors_with_editor_theme=false

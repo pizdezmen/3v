@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dvhvt4t8j5j2o"
-path="res://.godot/imported/ice2.svg-1c0292f90654623120c1ef4dd7170d80.ctex"
+uid="uid://bu8f1kfink3k"
+path="res://.godot/imported/crate1.png-cf683b4ca51303d92a11d1ac0d7f444f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/ice2.svg"
-dest_files=["res://.godot/imported/ice2.svg-1c0292f90654623120c1ef4dd7170d80.ctex"]
+source_file="res://assets/art/crate1.png"
+dest_files=["res://.godot/imported/crate1.png-cf683b4ca51303d92a11d1ac0d7f444f.ctex"]
 
 [params]
 
@@ -32,6 +32,3 @@ process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
-svg/scale=1.0
-editor/scale_with_editor_scale=false
-editor/convert_colors_with_editor_theme=false
