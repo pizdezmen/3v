@@ -33,6 +33,8 @@ var _idle := 0.0
 var _hint_tweens: Array = []
 var _frame_box: StyleBoxFlat
 var _shards: Shards
+var _birth: BirthFx
+var _white: ShaderMaterial
 var _dim_box: StyleBoxFlat
 var _base_pos := Vector2.ZERO
 var _clock := 0.0
@@ -56,6 +58,13 @@ func _ready() -> void:
 	add_child(_fx_layer)
 	_shards = Shards.new()
 	add_child(_shards)
+	_birth = BirthFx.new()
+	_birth.view = self
+	add_child(_birth)
+	var sh := Shader.new()
+	sh.code = "shader_type canvas_item;\nvoid fragment() { COLOR = vec4(1.0, 1.0, 1.0, texture(TEXTURE, UV).a * COLOR.a); }"
+	_white = ShaderMaterial.new()
+	_white.shader = sh
 	_frame_box = StyleBoxFlat.new()
 	_frame_box.bg_color = Art.FRAME
 	_frame_box.set_corner_radius_all(20)
@@ -141,6 +150,7 @@ func _set_look(n: Node2D, kind: int, color: int) -> void:
 	sp.rotation = PI / 2 if kind == Board.Kind.BAR_V else 0.0
 	n.set_meta("color", color)
 	n.set_meta("kind", kind)
+	n.set_meta("live", kind != Board.Kind.NORMAL)
 
 
 func _draw() -> void:
@@ -357,7 +367,8 @@ func play_steps(steps: Array) -> void:
 		match s["type"]:
 			"clear":
 				_start_clear(s, 0.0)
-				await _wait(s["dur"] + 0.24)
+				var extra := 0.0 if s["created"].is_empty() else BirthFx.GATHER + BirthFx.PAUSE + 0.06
+				await _wait(max(s["dur"] + 0.24, extra))
 			"fall":
 				_start_fall(s)
 				await _wait(s["ticks"] * HOP + LAND_TIME)
@@ -406,8 +417,23 @@ func _start_clear(s: Dictionary, offset: float) -> void:
 		_at(offset, Sfx.play.bind("match", min(1.0 + (cascade - 1) * 0.12, 2.0)))
 	for e in s["blockers"]:
 		_at(offset + e["t"], _blocker_event.bind(e))
+	if not s["created"].is_empty():
+		# рух далі починається, коли бустер уже проступає
+		_hold(offset + BirthFx.GATHER + BirthFx.PAUSE + 0.06)
 	for e in s["created"]:
-		_at(offset + e["t"] + 0.1, _create_event.bind(e))
+		# камені групи, з якої народжується бустер
+		var cells: Array = []
+		var hue := Color.WHITE
+		for r in s["removed"]:
+			if r["to"] == e["idx"]:
+				var rn: Node2D = _nodes.get(r["id"])
+				if rn != null:
+					rn.set_meta("bkind", e["kind"])
+				cells.append([center(r["idx"]), 1 if (r["idx"] % board.w + r["idx"] / board.w) % 2 == 1 else -1])
+				if r["color"] >= 0:
+					hue = Art.PIECE_COLORS[r["color"]]
+		_at(offset + e["t"], _birth.start.bind(center(e["idx"]), cells, hue, e["kind"]))
+		_at(offset + e["t"] + BirthFx.GATHER + BirthFx.PAUSE, _create_event.bind(e))
 	for e in s["transformed"]:
 		_at(offset + e["t"], _transform_event.bind(e))
 	for e in s["fx"]:
@@ -426,14 +452,22 @@ func _remove_node(e: Dictionary) -> void:
 	_busy_until.erase(e["id"])
 	var sp: Sprite2D = n.get_meta("sp")
 	if e["to"] >= 0:
-		# камені, що зливаються в бустер, уламків не дають
+		# камені, що зливаються в бустер, уламків не дають: вони летять дугою з хвостом
+		var from := n.position
+		var to := center(e["to"])
+		var side := 1 if (e["idx"] % board.w + e["idx"] / board.w) % 2 == 1 else -1
+		var dark: bool = n.get_meta("bkind", -1) == Board.Kind.BOMB
+		n.z_index = 1
 		var tw := n.create_tween()
-		tw.set_parallel(true)
-		if e["to"] != e["idx"]:
-			tw.tween_property(n, "position", center(e["to"]), 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		tw.tween_property(n, "scale", Vector2.ONE * 0.4, 0.16)
-		tw.tween_property(n, "modulate:a", 0.0, 0.16).set_delay(0.06)
-		tw.chain().tween_callback(n.queue_free)
+		tw.tween_method(func(p: float):
+			var q: Array = BirthFx.gather_pos(from, to, p, side, cell)
+			n.position = q[0]
+			n.scale = Vector2.ONE * (1.0 - 0.45 * maxf(0.0, q[1]))
+			var c := Color.WHITE.lerp(Color(0.3, 0.24, 0.5), maxf(0.0, q[1]) * 0.75) if dark else Color.WHITE
+			c.a = 1.0 - BirthFx.smooth((p - 0.82) / 0.18)
+			n.modulate = c
+		, 0.0, 1.0, BirthFx.GATHER)
+		tw.tween_callback(n.queue_free)
 		return
 	# камінь розколюється на уламки своєї форми й кольору
 	var color: Color = Art.VIOLET
@@ -509,12 +543,75 @@ func _create_event(e: Dictionary) -> void:
 		_dead.erase(e["id"])
 		return
 	Sfx.play("create")
-	var n := _make_piece(e["id"], e["kind"], -1, center(e["idx"]))
-	n.scale = Vector2.ONE * 0.2
+	var pos := center(e["idx"])
+	if "auto" in OS.get_cmdline_user_args():
+		print("birth kind=%d frame=%d" % [e["kind"], Engine.get_frames_drawn()])
+	var n := _make_piece(e["id"], e["kind"], -1, pos)
+	n.set_meta("live", false)
+	var kind: int = e["kind"]
+	var sp: Sprite2D = n.get_meta("sp")
+	var base := sp.scale
+	var rot0 := sp.rotation
+	# біла постать, з якої проступає бустер
+	var white := Sprite2D.new()
+	white.texture = sp.texture
+	white.material = _white
+	sp.add_child(white)
 	var tw := n.create_tween()
-	tw.tween_property(n, "scale", Vector2.ONE * 1.25, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(n, "scale", Vector2.ONE, 0.1)
-	_ring(center(e["idx"]), cell * 1.6, Color(1, 1, 1, 0.5), 0.25)
+	tw.tween_method(func(p: float):
+		var k := 0.5 + 0.5 * BirthFx.back(p, BirthFx.BOUNCE)
+		var sc := Vector2(k, k)
+		var rot := 0.0
+		var dy := 0.0
+		if kind == Board.Kind.BOMB:
+			# бомба падає згори й присідає
+			dy = -(1.0 - BirthFx.ease_in(p / 0.5)) * cell * 0.95
+			if p > 0.5:
+				var sq := sin(PI * clampf((p - 0.5) / 0.3, 0.0, 1.0)) * 0.24
+				sc *= Vector2(1.0 + sq, 1.0 - sq)
+		elif kind == Board.Kind.SHUR:
+			rot = -(1.0 - BirthFx.ease_out(p)) * PI * 3.0
+		elif kind == Board.Kind.STAR:
+			rot = -(1.0 - BirthFx.ease_out(p)) * PI * 0.5
+		sp.scale = base * sc
+		sp.rotation = rot0 + rot
+		sp.position = Vector2(0, dy)
+		white.modulate.a = 1.0 - BirthFx.smooth(p / 0.85)
+	, 0.0, 1.0, BirthFx.REVEAL)
+	tw.tween_callback(func():
+		white.queue_free()
+		sp.scale = base
+		sp.position = Vector2.ZERO
+		n.set_meta("live", true))
+	_shake(cell * 0.06)
+	_push_neighbours(pos, e["id"])
+
+
+## Хвиля від появи бустера легко штовхає сусідні камені.
+func _push_neighbours(pos: Vector2, skip_id: int) -> void:
+	for id in _nodes:
+		if id == skip_id:
+			continue
+		var n: Node2D = _nodes[id]
+		var d := n.position - pos
+		var dist := d.length() / cell
+		if dist < 0.3 or dist > 3.6:
+			continue
+		var sp: Sprite2D = n.get_meta("sp")
+		var dir := d.normalized()
+		var amp := 13.0 / maxf(1.0, dist) * (0.8 + BirthFx.GLOW * 0.5) * cell / 56.0
+		var tw := n.create_tween()
+		tw.tween_interval(dist * 0.045)
+		tw.tween_method(func(u: float): sp.position = dir * (sin(u * PI) * (1.0 - u) * amp), 0.0, 1.0, 0.42)
+
+
+func live_boosters() -> Array:
+	var out: Array = []
+	for id in _nodes:
+		var n: Node2D = _nodes[id]
+		if n.get_meta("live", false):
+			out.append(n)
+	return out
 
 
 func _transform_event(e: Dictionary) -> void:
@@ -744,6 +841,14 @@ func _process(delta: float) -> void:
 	if board == null:
 		return
 	_clock += delta
+	# життя після появи: сюрикен повільно обертається, зірка ледь пульсує
+	for n in live_boosters():
+		var kind: int = n.get_meta("kind")
+		var sp: Sprite2D = n.get_meta("sp")
+		if kind == Board.Kind.SHUR:
+			sp.rotation += 0.9 * delta
+		elif kind == Board.Kind.STAR:
+			sp.scale = Vector2.ONE * cell * PIECE_SCALE / sp.texture.get_width() * (1.0 + 0.045 * sin(_clock * 3.2))
 	if _pending and not busy and _clock >= _step_until:
 		_advance()
 	if busy or _pending or not input_enabled:
