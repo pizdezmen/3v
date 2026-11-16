@@ -180,16 +180,19 @@ func _draw() -> void:
 			draw_rect(r, col)
 		else:
 			draw_style_box(_cell_box(mask, col), r)
-	# сяйво під каменями: два рівні яскраве, один тьмяне
-	for i in mini(_glow_view.size(), board.w * board.h):
-		var level := _glow_view[i]
-		if level <= 0 or board.playable[i] != 1:
-			continue
-		var o := Vector2(i % board.w, i / board.w) * cell
-		var k: float = Art.GLOW_STRENGTH
-		draw_rect(Rect2(o, Vector2(cell, cell)), Color(Art.GLOW, (0.5 if level > 1 else 0.2) * k))
-		draw_texture_rect(Art.dot, Rect2(o - Vector2(cell, cell) * 0.1, Vector2(cell, cell) * 1.2), false,
-				Color(Art.GLOW, (0.34 if level > 1 else 0.15) * k))
+	# сяйво під каменями: два рівні яскраве, один тьмяне (спершу всі заливки, потім усі плями світла: так менше викликів малювання)
+	var k: float = Art.GLOW_STRENGTH
+	for pass_no in 2:
+		for i in mini(_glow_view.size(), board.w * board.h):
+			var level := _glow_view[i]
+			if level <= 0 or board.playable[i] != 1:
+				continue
+			var o := Vector2(i % board.w, i / board.w) * cell
+			if pass_no == 0:
+				draw_rect(Rect2(o, Vector2(cell, cell)), Color(Art.GLOW, (0.5 if level > 1 else 0.2) * k))
+			else:
+				draw_texture_rect(Art.dot, Rect2(o - Vector2(cell, cell) * 0.1, Vector2(cell, cell) * 1.2), false,
+						Color(Art.GLOW, (0.34 if level > 1 else 0.15) * k))
 
 
 func _cell_box(mask: int, col: Color) -> StyleBoxFlat:
@@ -565,7 +568,8 @@ func _blocker_event(e: Dictionary) -> void:
 				_glow_view[i] = e["left"]
 			queue_redraw()
 			Sfx.play("click", 1.5 if e["left"] > 0 else 1.9, -9.0)
-			_burst(center(i), Art.GLOW, 5)
+			if e["left"] == 0:
+				_burst(center(i), Art.GLOW, 5)
 		"chain":
 			Sfx.play("chain")
 			_burst(center(i), Color("#c9d1df"), 8)
