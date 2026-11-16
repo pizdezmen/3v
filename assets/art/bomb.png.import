@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://d1qgube0mn2pw"
-path="res://.godot/imported/star.svg-2a60c4cd6911ee63476e487681855cf9.ctex"
+uid="uid://c8ew0a7t5wvtv"
+path="res://.godot/imported/bomb.png-84985f2148f0bf9943a104e60d304ddd.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/star.svg"
-dest_files=["res://.godot/imported/star.svg-2a60c4cd6911ee63476e487681855cf9.ctex"]
+source_file="res://assets/art/bomb.png"
+dest_files=["res://.godot/imported/bomb.png-84985f2148f0bf9943a104e60d304ddd.ctex"]
 
 [params]
 
@@ -32,6 +32,3 @@ process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
-svg/scale=1.0
-editor/scale_with_editor_scale=false
-editor/convert_colors_with_editor_theme=false

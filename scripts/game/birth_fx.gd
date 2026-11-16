@@ -164,8 +164,10 @@ func _draw() -> void:
 				_glow(q2, 7.0 * sp[2] * px, hue, (1.0 - age) * (0.7 + GLOW * 0.4))
 				_glow(q2, 2.6 * sp[2] * px, Color.WHITE, 1.0 - age)
 	# життя після появи: зірка переливається, запал бомби жевріє
+	var breath := 0.5 - 0.5 * cos(_time * TAU / 2.6)
 	for n in view.live_boosters():
 		var kind: int = n.get_meta("kind")
+		_glow(n.position, s * 0.8, Color("#c8b4ff"), 0.16 * breath * n.modulate.a)
 		if kind == Board.Kind.STAR:
 			_glow(n.position, s * 0.95, STAR_COLS[int(_time * 1.2) % 4], (0.12 + 0.1 * sin(_time * 3.2)) * (0.4 + GLOW) * n.modulate.a)
 		elif kind == Board.Kind.BOMB:

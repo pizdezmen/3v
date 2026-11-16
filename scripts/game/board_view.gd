@@ -886,14 +886,13 @@ func _process(delta: float) -> void:
 		return
 	_clock += delta
 	_shadow_layer.queue_redraw()
-	# життя після появи: сюрикен повільно обертається, зірка ледь пульсує
+	# життя після появи: усі бустери ледь дихають, сюрикен ще й повільно обертається
+	var breath := 1.0 + 0.045 * (0.5 - 0.5 * cos(_clock * TAU / 2.6))
 	for n in live_boosters():
-		var kind: int = n.get_meta("kind")
 		var sp: Sprite2D = n.get_meta("sp")
-		if kind == Board.Kind.SHUR:
+		if n.get_meta("kind") == Board.Kind.SHUR:
 			sp.rotation += 0.9 * delta
-		elif kind == Board.Kind.STAR:
-			sp.scale = Vector2.ONE * cell * PIECE_SCALE / sp.texture.get_width() * (1.0 + 0.045 * sin(_clock * 3.2))
+		sp.scale = Vector2.ONE * cell * PIECE_SCALE / sp.texture.get_width() * breath
 	if _pending and not busy and _clock >= _step_until:
 		_advance()
 	if busy or _pending or not input_enabled:

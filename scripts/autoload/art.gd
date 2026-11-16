@@ -40,7 +40,11 @@ func _ready() -> void:
 	var sheet := Image.create(step * 4, step * 4, false, Image.FORMAT_RGBA8)
 	var slots: Array = []
 	for i in names.size():
-		var img: Image = (load("res://assets/art/%s.svg" % names[i]) as Texture2D).get_image()
+		# камені й бустери намальовано зі світінням і збережено як PNG, перешкоди лишаються SVG
+		var path := "res://assets/art/%s.png" % names[i]
+		if not ResourceLoader.exists(path):
+			path = "res://assets/art/%s.svg" % names[i]
+		var img: Image = (load(path) as Texture2D).get_image()
 		if img.is_compressed():
 			img.decompress()
 		img.convert(Image.FORMAT_RGBA8)
