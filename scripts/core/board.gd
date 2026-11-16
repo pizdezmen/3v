@@ -23,7 +23,7 @@ var playable := PackedByteArray()
 var pieces: Array = []            # null або {id, kind, color}
 var crate := PackedInt32Array()   # міцність ящика (0 = немає)
 var ice := PackedInt32Array()     # шари льоду на фішці (0..2)
-var chain := PackedByteArray()    # 1 = фішка в ланцюгах
+var chain := PackedByteArray()    # 1 = ланцюг на клітинці: камені падають крізь, гравець їх не рухає, ламає лише бустер
 var goals := {}                   # назва -> скільки ще лишилось
 var goals_start := {}
 var moves_left := 0
@@ -188,7 +188,7 @@ func _neighbor(i: int, d: Vector2i) -> int:
 
 
 func _movable(i: int) -> bool:
-	return pieces[i] != null and crate[i] == 0 and ice[i] == 0 and chain[i] == 0
+	return pieces[i] != null and crate[i] == 0 and ice[i] == 0
 
 
 func _empty(i: int) -> bool:
@@ -470,16 +470,13 @@ func _apply_groups(groups: Array, swap_cells: Array, horizontal_swap: bool) -> v
 					adjacent[nb] = true
 			if c == spawn:
 				continue
-			if chain[c] > 0:
-				_damage_chain(c, 0.0)
-			elif ice[c] > 0:
+			# ланцюг збігом не знімається: камінь під ним збирається, ланцюг лишається на клітинці
+			if ice[c] > 0:
 				_damage_ice(c, 0.0)
 			else:
 				_remove_piece(c, 0.0, spawn)
 		if spawn >= 0:
-			if chain[spawn] > 0:
-				_damage_chain(spawn, 0.0)
-			elif ice[spawn] > 0:
+			if ice[spawn] > 0:
 				_damage_ice(spawn, 0.0)
 			_remove_piece(spawn, 0.0, spawn)
 			var np := _new_piece(kind, -1)
@@ -501,14 +498,14 @@ func _hit(i: int, t: float, seen: Dictionary) -> void:
 	if crate[i] > 0:
 		_damage_crate(i, t)
 		return
+	# вибух бустера знімає ланцюг разом із каменем під ним
+	if chain[i] > 0:
+		_damage_chain(i, t)
 	var p = pieces[i]
 	if p == null:
 		return
 	if ice[i] > 0:
 		_damage_ice(i, t)
-		return
-	if chain[i] > 0:
-		_damage_chain(i, t)
 		return
 	_remove_piece(i, t)
 	if p["kind"] != Kind.NORMAL:
@@ -783,7 +780,7 @@ func _move_piece(from: int, to: int, tick: int, paths: Dictionary, order: Array)
 # ---------------------------------------------------------------- ходи
 
 func _swappable(i: int) -> bool:
-	return i >= 0 and playable[i] == 1 and _movable(i)
+	return i >= 0 and playable[i] == 1 and _movable(i) and chain[i] == 0
 
 
 func can_swap(a: int, b: int) -> bool:
@@ -957,7 +954,7 @@ func find_moves() -> Array:
 			continue
 		var p: Dictionary = pieces[i]
 		if p["kind"] != Kind.NORMAL:
-			res.append({"a": i, "b": i, "score": 20 + _booster_value(p["kind"])})
+			res.append({"a": i, "b": i, "score": 20 + _booster_value(p["kind"]) + _chain_reach(i, p["kind"])})
 		for d in [Vector2i(1, 0), Vector2i(0, 1)]:
 			var n := _neighbor(i, d)
 			if n < 0 or not _swappable(n):
@@ -967,7 +964,8 @@ func find_moves() -> Array:
 				res.append({"a": i, "b": n, "score": 40 + _booster_value(p["kind"]) + _booster_value(q["kind"])})
 			elif p["kind"] != Kind.NORMAL or q["kind"] != Kind.NORMAL:
 				var bk: int = p["kind"] if p["kind"] != Kind.NORMAL else q["kind"]
-				res.append({"a": i, "b": n, "score": 21 + _booster_value(bk)})
+				var at: int = n if p["kind"] != Kind.NORMAL else i   # де бустер опиниться після обміну
+				res.append({"a": i, "b": n, "score": 21 + _booster_value(bk) + _chain_reach(at, bk)})
 			elif p["color"] != q["color"]:
 				pieces[i] = q
 				pieces[n] = p
@@ -983,6 +981,30 @@ func find_moves() -> Array:
 				if s1 + s2 > 0:
 					res.append({"a": i, "b": n, "score": s1 + s2 + bonus})
 	return res
+
+
+## Скільки ланцюгів зачепить бустер із клітинки i (для бота й підказки).
+func _chain_reach(i: int, kind: int) -> int:
+	var n := 0
+	var x0 := i % w
+	var y0 := i / w
+	match kind:
+		Kind.BAR_H:
+			for x in w:
+				n += chain[y0 * w + x]
+		Kind.BAR_V:
+			for y in h:
+				n += chain[y * w + x0]
+		Kind.BOMB:
+			for y in range(max(0, y0 - 2), min(h, y0 + 3)):
+				for x in range(max(0, x0 - 2), min(w, x0 + 3)):
+					n += chain[y * w + x]
+		_:
+			for j in w * h:
+				if chain[j] > 0:
+					n = 1
+					break
+	return n * (9 if goals.get("chain", 0) > 0 else 2)
 
 
 func _booster_value(kind: int) -> int:
@@ -1008,8 +1030,6 @@ func _goal_bonus(i: int, color: int) -> int:
 			bonus += 7 if goals.get("crate", 0) > 0 else 2
 		elif ice[nb] > 0:
 			bonus += 7 if goals.get("ice", 0) > 0 else 2
-		elif chain[nb] > 0 and pieces[nb] != null and pieces[nb]["color"] == color:
-			bonus += 7 if goals.get("chain", 0) > 0 else 2
 	# нижчі ходи трохи корисніші: більше каскадів
 	bonus += (i / w) * 2 / max(1, h)
 	return bonus

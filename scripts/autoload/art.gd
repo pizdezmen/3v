@@ -15,6 +15,7 @@ const VIOLET := Color("#a06bff")
 
 var pieces: Array = []
 var bar: Texture2D
+var bar_v: Texture2D
 var bomb: Texture2D
 var star: Texture2D
 var shur: Texture2D
@@ -32,7 +33,7 @@ var font: Font
 func _ready() -> void:
 	# усі малюнки поля складаємо в один аркуш: тоді камені малюються одним викликом, а не кожен окремо
 	var names := ["piece_0", "piece_1", "piece_2", "piece_3", "bar", "bomb", "star", "shur",
-			"crate1", "crate2", "ice1", "ice2", "chain"]
+			"crate1", "crate2", "ice1", "ice2", "chain", "bar_v"]
 	var tile := 256
 	var pad := 2
 	var step := tile + pad * 2
@@ -65,6 +66,7 @@ func _ready() -> void:
 	ice1 = parts[10]
 	ice2 = parts[11]
 	chain = parts[12]
+	bar_v = parts[13]
 	font_bold = load("res://assets/fonts/Rubik-ExtraBold.ttf")
 	font = load("res://assets/fonts/Rubik-SemiBold.ttf")
 	shadow = _radial(96, 32, Color(0, 0, 0, 0.5))
@@ -86,8 +88,10 @@ func _radial(width: int, height: int, color: Color) -> Texture2D:
 
 func piece_texture(kind: int, color: int) -> Texture2D:
 	match kind:
-		Board.Kind.BAR_H, Board.Kind.BAR_V:
+		Board.Kind.BAR_H:
 			return bar
+		Board.Kind.BAR_V:
+			return bar_v
 		Board.Kind.BOMB:
 			return bomb
 		Board.Kind.STAR:

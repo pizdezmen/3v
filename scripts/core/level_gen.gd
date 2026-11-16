@@ -110,6 +110,9 @@ static func _place(grid: Array, kind: String, rng: RandomNumberGenerator, d: flo
 	var half := (w + 1) / 2
 	var pattern := rng.randi_range(0, 2)
 	var amount := int(7 + d * 9 + rng.randi_range(0, 4))
+	if kind == "chain":
+		# ланцюг ламають лише бустери, тож їх менше: не більш як п'ята частина поля
+		amount = mini(int(4 + d * 6 + rng.randi_range(0, 2)), w * h / 5)
 	var tries := 0
 	if kind == "crate" and pattern == 0:
 		# стіна внизу

@@ -262,11 +262,37 @@ func test_obstacles() -> void:
 		"ybryg",
 	], {"chain": 0})
 	b.pieces[b.idx(2, 1)]["color"] = 1
+	var chained_id: int = b.pieces[b.idx(2, 1)]["id"]
+	check(not b.can_swap(b.idx(2, 1), b.idx(2, 2)), "камінь під ланцюгом не можна зсунути")
+	check(not b.can_swap(b.idx(3, 1), b.idx(2, 1)), "у клітинку з ланцюгом не можна міняти")
 	groups = b._find_groups()
 	b._begin_step()
 	b._apply_groups(groups, [], false)
-	check(b.chain[b.idx(2, 1)] == 0, "збіг знімає ланцюг")
+	check(b.chain[b.idx(2, 1)] == 1, "збіг не знімає ланцюг")
+	check(b.pieces[b.idx(2, 1)] == null or b.pieces[b.idx(2, 1)]["id"] != chained_id, "камінь під ланцюгом збирається у збігу")
+	b._gravity()
+	check(b.pieces[b.idx(2, 1)] != null, "камені падають у клітинку з ланцюгом")
+	check(not b.is_won(), "ціль ланцюгів ще не виконано")
+
+	b = make([
+		"rgbyr",
+		"gHcyb",
+		"rbgby",
+		"ybryg",
+	], {"chain": 0})
+	b.play_tap(b.idx(1, 1))
+	check(b.chain[b.idx(2, 1)] == 0, "вибух бустера знімає ланцюг")
 	check(b.is_won(), "ціль ланцюгів виконано")
+
+	b = make([
+		"rgbyr",
+		"gbryb",
+		"rbcby",
+		"ybryg",
+	], {"chain": 0})
+	b.pieces[b.idx(2, 2)] = null
+	b._gravity()
+	check(b.pieces[b.idx(2, 2)] != null and b.chain[b.idx(2, 2)] == 1, "камінь падає крізь ланцюг, ланцюг на місці")
 
 
 func test_holes_and_slide() -> void:

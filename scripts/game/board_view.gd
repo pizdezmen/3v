@@ -155,7 +155,7 @@ func _set_look(n: Node2D, kind: int, color: int) -> void:
 	var sp: Sprite2D = n.get_meta("sp")
 	sp.texture = Art.piece_texture(kind, color)
 	sp.scale = Vector2.ONE * cell * PIECE_SCALE / sp.texture.get_width()
-	sp.rotation = PI / 2 if kind == Board.Kind.BAR_V else 0.0
+	sp.rotation = 0.0
 	n.set_meta("color", color)
 	n.set_meta("kind", kind)
 	n.set_meta("live", kind != Board.Kind.NORMAL)
