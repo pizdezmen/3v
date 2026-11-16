@@ -98,6 +98,26 @@ static func _build(number: int, attempt: int) -> Dictionary:
 		var c: String = colors[rng.randi_range(0, colors.size() - 1)]
 		colors.erase(c)
 		goals[c] = int(round((35 + d * 35 + rng.randi_range(0, 12)) / 5.0)) * 5
+	# місяці, які треба опустити донизу: окремий генератор чисел, щоб решта рівнів не змінилась
+	var mrng := RandomNumberGenerator.new()
+	mrng.seed = number * 6151 + attempt * 31 + 5
+	if number >= 4 and goals.size() < 3 and mrng.randf() < 0.3:
+		var columns: Array = []
+		for x in w:
+			for y in h:
+				if grid[y][x] == "#":
+					continue
+				if grid[y][x] == "." and y < h - 3:
+					columns.append([x, y])
+				break
+		var want := mrng.randi_range(1, 3)
+		var placed_moons := 0
+		while placed_moons < want and not columns.is_empty():
+			var pick: Array = columns.pop_at(mrng.randi_range(0, columns.size() - 1))
+			grid[pick[1]][pick[0]] = "M"
+			placed_moons += 1
+		if placed_moons > 0:
+			goals["moon"] = 0
 	var layout: Array = []
 	for row in grid:
 		layout.append("".join(row))

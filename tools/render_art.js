@@ -18,6 +18,8 @@ const fs = require('fs');
     if (svg.length === before) throw new Error('no shadow ' + n);
     await shot(n, svg, 'brightness(1.05) saturate(1.2)');
   }
+  // місяць, який треба опустити донизу
+  await shot('moon', fs.readFileSync(src + 'moon.svg', 'utf8'), 'brightness(1.05)');
   // перешкоди: яскравість 89%
   for (const n of ['crate1','crate2','ice1','ice2','chain']) await shot(n, fs.readFileSync(src + n + '.svg', 'utf8'), 'brightness(0.89)');
   await b.close();

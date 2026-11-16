@@ -3,7 +3,9 @@ extends RefCounted
 ## Чиста логіка поля "три в ряд" без жодної графіки.
 ## Кожен хід повертає список кроків (steps), які екран лише програє як анімацію.
 
-enum Kind { NORMAL, BAR_H, BAR_V, BOMB, STAR, SHUR }
+enum Kind { NORMAL, BAR_H, BAR_V, BOMB, STAR, SHUR, MOON }
+# MOON: місяць. Не збирається у збіги, не рухається пальцем і не ламається бустерами,
+# лише падає; коли доходить до нижньої клітинки стовпця, виходить з поля (ціль "moon").
 
 # Комбінації бустерів (значення продовжують Kind, щоб жити в одній черзі).
 const C_CROSS := 10      # брусок + брусок: ряд і стовпець
@@ -95,6 +97,8 @@ func setup(level: Dictionary, seed_value: int) -> void:
 					pieces[i] = _new_piece(Kind.STAR, -1)
 				"P":
 					pieces[i] = _new_piece(Kind.SHUR, -1)
+				"M":
+					pieces[i] = _new_piece(Kind.MOON, -1)
 				"r":
 					pieces[i] = _new_piece(Kind.NORMAL, 0)
 				"g":
@@ -160,6 +164,9 @@ func count_on_board(key: String) -> int:
 			"chain":
 				if chain[i] > 0:
 					total += 1
+			"moon":
+				if pieces[i] != null and pieces[i]["kind"] == Kind.MOON:
+					total += 1
 			_:
 				var p = pieces[i]
 				if p != null and p["kind"] == Kind.NORMAL and COLOR_NAMES[p["color"]] == key:
@@ -186,6 +193,44 @@ func _neighbor(i: int, d: Vector2i) -> int:
 		return -1
 	var n := y * w + x
 	return n if playable[n] == 1 else -1
+
+
+func _is_booster(p: Dictionary) -> bool:
+	return p["kind"] != Kind.NORMAL and p["kind"] != Kind.MOON
+
+
+## Місяці, що дійшли до нижньої клітинки свого стовпця.
+func _moons_at_bottom() -> Array:
+	var res: Array = []
+	for x in w:
+		for y in range(h - 1, -1, -1):
+			var i := y * w + x
+			if playable[i] == 0:
+				continue
+			var p = pieces[i]
+			if p != null and p["kind"] == Kind.MOON and crate[i] == 0 and ice[i] == 0:
+				res.append(i)
+			break
+	return res
+
+
+## Місяць виходить з поля. Викликається всередині кроку очищення.
+func _collect_moons(cells: Array) -> void:
+	for i in cells:
+		var p: Dictionary = pieces[i]
+		pieces[i] = null
+		_rm.append({"id": p["id"], "idx": i, "t": 0.0, "to": -1, "goal": "moon" if _count("moon") else "",
+				"kind": p["kind"], "color": -1, "exit": true})
+
+
+## Чи є над клітинкою i у її стовпці місяць (для бота, підказки й сюрикена).
+func _under_moon(i: int) -> bool:
+	var x := i % w
+	for y in range(i / w - 1, -1, -1):
+		var p = pieces[y * w + x]
+		if p != null and p["kind"] == Kind.MOON:
+			return true
+	return false
 
 
 func _movable(i: int) -> bool:
@@ -511,6 +556,8 @@ func _hit(i: int, t: float, seen: Dictionary) -> void:
 	if ice[i] > 0:
 		_damage_ice(i, t)
 		return
+	if p["kind"] == Kind.MOON:
+		return
 	_remove_piece(i, t)
 	if p["kind"] != Kind.NORMAL:
 		_queue.append({"t": t + 0.1, "idx": i, "kind": p["kind"]})
@@ -679,11 +726,14 @@ func _launch(from: int, t: float, carry: int) -> void:
 ## Куди летить сюрикен: спершу те, що треба для цілей рівня.
 func _pick_target(from: int) -> int:
 	var tiers: Array = [[], [], [], []]
+	var moon_goal: bool = goals.get("moon", 0) > 0
 	for j in w * h:
 		if playable[j] == 0 or j == from or _targeted.has(j) or _protected.has(j):
 			continue
 		var p = pieces[j]
-		if crate[j] > 0:
+		if moon_goal and _under_moon(j) and (crate[j] > 0 or (p != null and p["kind"] != Kind.MOON)):
+			tiers[0].append(j)
+		elif crate[j] > 0:
 			tiers[0 if goals.get("crate", 0) > 0 else 2].append(j)
 		elif p == null:
 			continue
@@ -786,7 +836,7 @@ func _move_piece(from: int, to: int, tick: int, paths: Dictionary, order: Array)
 # ---------------------------------------------------------------- ходи
 
 func _swappable(i: int) -> bool:
-	return i >= 0 and playable[i] == 1 and _movable(i) and chain[i] == 0
+	return i >= 0 and playable[i] == 1 and _movable(i) and chain[i] == 0 and pieces[i]["kind"] != Kind.MOON
 
 
 func can_swap(a: int, b: int) -> bool:
@@ -914,9 +964,11 @@ func step_gravity() -> Dictionary:
 ## Один крок очищення збігів, що утворилися самі. Порожній словник = збігів немає.
 func step_matches() -> Dictionary:
 	var groups := _find_groups()
-	if groups.is_empty():
+	var moons := _moons_at_bottom()
+	if groups.is_empty() and moons.is_empty():
 		return {}
 	_begin_step()
+	_collect_moons(moons)
 	_apply_groups(groups, [], false)
 	_run_queue()
 	return _end_step()
@@ -935,9 +987,11 @@ func _settle(steps: Array) -> void:
 		if not fall["moves"].is_empty():
 			steps.append(fall)
 		var groups := _find_groups()
-		if groups.is_empty():
+		var moons := _moons_at_bottom()
+		if groups.is_empty() and moons.is_empty():
 			return
 		_begin_step()
+		_collect_moons(moons)
 		_apply_groups(groups, [], false)
 		_run_queue()
 		steps.append(_end_step())
@@ -1036,6 +1090,8 @@ func _goal_bonus(i: int, color: int) -> int:
 			bonus += 7 if goals.get("crate", 0) > 0 else 2
 		elif ice[nb] > 0:
 			bonus += 7 if goals.get("ice", 0) > 0 else 2
+	if goals.get("moon", 0) > 0 and _under_moon(i):
+		bonus += 10
 	# нижчі ходи трохи корисніші: більше каскадів
 	bonus += (i / w) * 2 / max(1, h)
 	return bonus
@@ -1073,7 +1129,7 @@ func _shuffle() -> Dictionary:
 func has_boosters() -> bool:
 	for i in w * h:
 		var p = pieces[i]
-		if p != null and p["kind"] != Kind.NORMAL:
+		if p != null and _is_booster(p):
 			return true
 	return false
 
@@ -1100,7 +1156,7 @@ func play_finale(max_new: int = 12) -> Array:
 		var boosters: Array = []
 		for i in w * h:
 			var p = pieces[i]
-			if p != null and p["kind"] != Kind.NORMAL and crate[i] == 0:
+			if p != null and _is_booster(p) and crate[i] == 0:
 				boosters.append(i)
 		if boosters.is_empty():
 			break

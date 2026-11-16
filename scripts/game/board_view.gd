@@ -474,6 +474,16 @@ func _remove_node(e: Dictionary) -> void:
 	_nodes.erase(e["id"])
 	_busy_until.erase(e["id"])
 	var sp: Sprite2D = n.get_meta("sp")
+	if e.get("exit", false):
+		# місяць дійшов до низу: м'яко опускається за край поля і тане
+		Sfx.play("create", 0.75)
+		n.z_index = 1
+		var out := n.create_tween().set_parallel().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		out.tween_property(n, "position:y", n.position.y + cell * 0.9, 0.38)
+		out.tween_property(n, "modulate:a", 0.0, 0.38)
+		out.tween_property(n, "scale", Vector2.ONE * 0.8, 0.38)
+		out.chain().tween_callback(n.queue_free)
+		return
 	if e["to"] >= 0:
 		# камені, що зливаються в бустер, уламків не дають: вони летять дугою з хвостом
 		var from := n.position

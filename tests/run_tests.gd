@@ -56,6 +56,7 @@ func _init() -> void:
 	test_booster_effects()
 	test_combos()
 	test_obstacles()
+	test_moon()
 	test_holes_and_slide()
 	test_goals_and_finale()
 	test_shuffle()
@@ -293,6 +294,51 @@ func test_obstacles() -> void:
 	b.pieces[b.idx(2, 2)] = null
 	b._gravity()
 	check(b.pieces[b.idx(2, 2)] != null and b.chain[b.idx(2, 2)] == 1, "камінь падає крізь ланцюг, ланцюг на місці")
+
+
+func test_moon() -> void:
+	var b := make([
+		"rgbyr",
+		"yMgby",
+		"rrgyb",
+		"byrgy",
+	], {"moon": 0})
+	check(b.goals.get("moon", 0) == 1, "місяць на полі рахується в ціль")
+	check(not b.can_swap(b.idx(1, 1), b.idx(1, 0)), "місяць не рухається пальцем")
+	check(not b.can_swap(b.idx(0, 1), b.idx(1, 1)), "камінь на місце місяця не зсунути")
+	check(b.play_tap(b.idx(1, 1)).is_empty(), "натиск на місяць нічого не робить")
+	b.play_swap(b.idx(2, 2), b.idx(2, 3))
+	check(kind_at(b, 1, 2) == Board.Kind.MOON, "місяць падає, коли під ним збирають камені")
+	check(b.goals.get("moon", 0) == 1 and not b.is_won(), "місяць ще не внизу")
+	# бомба поруч не ламає місяць
+	b.pieces[b.idx(2, 2)]["kind"] = Board.Kind.BOMB
+	b.pieces[b.idx(2, 2)]["color"] = -1
+	b.play_tap(b.idx(2, 2))
+	check(count_kind(b, Board.Kind.MOON) == 0 and b.is_won(), "після вибуху місяць падає до низу й виходить")
+	invariants(b, "місяць після виходу", true)
+
+	b = make([
+		"rMbyr",
+		"y1gby",
+		"rbgyb",
+		"byrgy",
+	], {"moon": 0})
+	var steps: Array = []
+	b._settle(steps)
+	check(kind_at(b, 1, 0) == Board.Kind.MOON, "ящик не пропускає місяць")
+	b.crate[b.idx(1, 1)] = 0
+	b.pieces[b.idx(1, 1)] = null
+	b.pieces[b.idx(1, 2)] = null
+	b.pieces[b.idx(1, 3)] = null
+	b._settle(steps)
+	check(b.is_won(), "місяць доходить до низу, коли шлях вільний")
+	var exits := 0
+	for st in steps:
+		if st["type"] == "clear":
+			for e in st["removed"]:
+				if e.get("exit", false) and e["goal"] == "moon":
+					exits += 1
+	check(exits == 1, "вихід місяця віддається екрану як окрема подія")
 
 
 func test_holes_and_slide() -> void:

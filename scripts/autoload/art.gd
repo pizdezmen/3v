@@ -24,6 +24,7 @@ var crate2: Texture2D
 var ice1: Texture2D
 var ice2: Texture2D
 var chain: Texture2D
+var moon: Texture2D
 var shadow: Texture2D
 var dot: Texture2D
 var font_bold: Font
@@ -33,7 +34,7 @@ var font: Font
 func _ready() -> void:
 	# усі малюнки поля складаємо в один аркуш: тоді камені малюються одним викликом, а не кожен окремо
 	var names := ["piece_0", "piece_1", "piece_2", "piece_3", "bar", "bomb", "star", "shur",
-			"crate1", "crate2", "ice1", "ice2", "chain", "bar_v"]
+			"crate1", "crate2", "ice1", "ice2", "chain", "bar_v", "moon"]
 	var tile := 256
 	var pad := 2
 	var step := tile + pad * 2
@@ -68,6 +69,7 @@ func _ready() -> void:
 	ice2 = parts[11]
 	chain = parts[12]
 	bar_v = parts[13]
+	moon = parts[14]
 	font_bold = load("res://assets/fonts/Rubik-ExtraBold.ttf")
 	font = load("res://assets/fonts/Rubik-SemiBold.ttf")
 	shadow = _radial(96, 32, Color(0, 0, 0, 0.5))
@@ -99,6 +101,8 @@ func piece_texture(kind: int, color: int) -> Texture2D:
 			return star
 		Board.Kind.SHUR:
 			return shur
+		Board.Kind.MOON:
+			return moon
 	return pieces[clampi(color, 0, 3)]
 
 
@@ -110,6 +114,8 @@ func goal_texture(key: String) -> Texture2D:
 			return ice2
 		"chain":
 			return chain
+		"moon":
+			return moon
 	return pieces[Board.COLOR_NAMES.find(key)]
 
 

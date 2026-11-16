@@ -305,6 +305,8 @@ func _show_tip() -> void:
 			tex = Art.bomb
 		"star":
 			tex = Art.star
+		"moon":
+			tex = Art.moon
 		"shur":
 			tex = Art.shur
 		"crate":
