@@ -150,7 +150,7 @@ func test_booster_effects() -> void:
 		"rgbyrg",
 	])
 	steps = b.play_tap(b.idx(2, 2))
-	check(steps[0]["removed"].size() >= 25, "бомба чистить 5x5")
+	check(steps[0]["removed"].size() >= 9 and steps[0]["removed"].size() < 25, "бомба чистить 3x3")
 	invariants(b, "бомба")
 
 	b = make([

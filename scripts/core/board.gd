@@ -603,11 +603,13 @@ func _activate(a: Dictionary) -> void:
 				_hit_row(y + o, x, t, seen)
 				_hit_col(x + o, y, t, seen)
 		Kind.BOMB:
-			_fx.append({"fx": "bomb", "idx": i, "r": 2, "t": t, "dur": 0.3})
-			_hit_area(x, y, 2, t, seen)
+			# бомба: квадрат 3 на 3
+			_fx.append({"fx": "bomb", "idx": i, "r": 1, "t": t, "dur": 0.3})
+			_hit_area(x, y, 1, t, seen)
 		C_BIG_BOMB:
-			_fx.append({"fx": "bomb", "idx": i, "r": 4, "t": t, "dur": 0.4})
-			_hit_area(x, y, 4, t, seen)
+			# дві бомби разом: квадрат 5 на 5
+			_fx.append({"fx": "bomb", "idx": i, "r": 2, "t": t, "dur": 0.4})
+			_hit_area(x, y, 2, t, seen)
 		C_NOVA:
 			_fx.append({"fx": "nova", "idx": i, "t": t, "dur": 0.6})
 			for j in w * h:
@@ -996,8 +998,8 @@ func _chain_reach(i: int, kind: int) -> int:
 			for y in h:
 				n += chain[y * w + x0]
 		Kind.BOMB:
-			for y in range(max(0, y0 - 2), min(h, y0 + 3)):
-				for x in range(max(0, x0 - 2), min(w, x0 + 3)):
+			for y in range(max(0, y0 - 1), min(h, y0 + 2)):
+				for x in range(max(0, x0 - 1), min(w, x0 + 2)):
 					n += chain[y * w + x]
 		_:
 			for j in w * h:

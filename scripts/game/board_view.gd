@@ -812,10 +812,10 @@ func _fx_event(e: Dictionary) -> void:
 			Sfx.play("line", randf_range(0.95, 1.1))
 			_beam(pos, e["horizontal"])
 		"bomb":
-			Sfx.play("bomb", 1.0 if e["r"] <= 2 else 0.8)
+			Sfx.play("bomb", 1.0 if e["r"] <= 1 else 0.8)
 			Progress.vibrate(30)
 			_ring(pos, cell * (e["r"] * 2 + 1.6), Color(1, 0.85, 0.5, 0.75), 0.32)
-			_shake(6.0 if e["r"] <= 2 else 11.0)
+			_shake(6.0 if e["r"] <= 1 else 11.0)
 		"nova":
 			Sfx.play("star")
 			Sfx.play("bomb", 0.7)
