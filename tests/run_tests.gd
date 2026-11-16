@@ -42,7 +42,7 @@ func invariants(b: Board, name: String, allow_empty: bool = false) -> void:
 		if b.crate[i] > 0:
 			check(p == null, name + ": фішка в ящику")
 			continue
-		check(p != null or allow_empty, name + ": порожня клітинка %d" % i)
+		check(p != null or allow_empty or b.is_won(), name + ": порожня клітинка %d" % i)
 		if p != null:
 			check(not ids.has(p["id"]), name + ": повтор id")
 			ids[p["id"]] = true
@@ -310,6 +310,11 @@ func test_goals_and_finale() -> void:
 	b.play_tap(b.idx(1, 1))
 	check(b.is_won(), "перемога після збору цілі")
 	check(b.stars() == 3, "три зірки за багато ходів")
+	var left := 0
+	for i in b.w * b.h:
+		if b.pieces[i] != null:
+			left += 1
+	check(left < b.w * b.h, "після перемоги нові камені не з'являються")
 	var steps := b.play_finale()
 	check(steps.size() >= 2 and steps[0]["type"] == "finale", "салют створює бустери")
 	check(not b.has_boosters(), "після салюту бустерів немає")

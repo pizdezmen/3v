@@ -726,6 +726,9 @@ func _gravity() -> Dictionary:
 					continue
 				var a := _above(c)
 				if a == -1:
+					# коли всі цілі виконано, нові камені згори вже не з'являються
+					if is_won():
+						continue
 					var np := _new_piece(Kind.NORMAL, rng.randi_range(0, num_colors - 1))
 					pieces[c] = np
 					paths[np["id"]] = {"id": np["id"], "spawn": true, "kind": np["kind"],

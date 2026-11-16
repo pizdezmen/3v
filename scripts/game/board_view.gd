@@ -32,6 +32,7 @@ var _selected := -1
 var _idle := 0.0
 var _hint_tweens: Array = []
 var _frame_box: StyleBoxFlat
+var _shards: Shards
 var _dim_box: StyleBoxFlat
 var _base_pos := Vector2.ZERO
 var _clock := 0.0
@@ -53,6 +54,8 @@ func _ready() -> void:
 	add_child(_pieces_layer)
 	add_child(_over_layer)
 	add_child(_fx_layer)
+	_shards = Shards.new()
+	add_child(_shards)
 	_frame_box = StyleBoxFlat.new()
 	_frame_box.bg_color = Art.FRAME
 	_frame_box.set_corner_radius_all(20)
@@ -421,23 +424,18 @@ func _remove_node(e: Dictionary) -> void:
 		return
 	_nodes.erase(e["id"])
 	_busy_until.erase(e["id"])
-	var tw := n.create_tween()
 	var sp: Sprite2D = n.get_meta("sp")
-	if e["to"] >= 0 and e["to"] != e["idx"]:
+	if e["to"] >= 0:
+		# камені, що зливаються в бустер, уламків не дають
+		var tw := n.create_tween()
 		tw.set_parallel(true)
-		tw.tween_property(n, "position", center(e["to"]), 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		if e["to"] != e["idx"]:
+			tw.tween_property(n, "position", center(e["to"]), 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 		tw.tween_property(n, "scale", Vector2.ONE * 0.4, 0.16)
 		tw.tween_property(n, "modulate:a", 0.0, 0.16).set_delay(0.06)
 		tw.chain().tween_callback(n.queue_free)
-	else:
-		tw.tween_property(n, "scale", Vector2.ONE * 1.18, 0.05)
-		tw.set_parallel(true)
-		tw.tween_property(n, "scale", Vector2.ONE * 0.2, 0.13).set_delay(0.05)
-		tw.tween_property(n, "modulate:a", 0.0, 0.13).set_delay(0.05)
-		tw.chain().tween_callback(n.queue_free)
-	# камені, що зливаються в бустер, уламків не дають
-	if e["to"] >= 0:
 		return
+	# камінь розколюється на уламки своєї форми й кольору
 	var color: Color = Art.VIOLET
 	if e["color"] >= 0:
 		color = Art.PIECE_COLORS[e["color"]]
@@ -447,9 +445,11 @@ func _remove_node(e: Dictionary) -> void:
 		color = Color("#e3e9f6")
 	elif e["kind"] == Board.Kind.STAR:
 		color = Color.WHITE
-	_burst(center(e["idx"]), color, 7)
-	if sp == null:
-		return
+	if sp != null and sp.texture != null:
+		_shards.shatter(n.position, sp.texture, cell * PIECE_SCALE, sp.rotation, cell, color)
+	else:
+		_burst(center(e["idx"]), color, 7)
+	n.queue_free()
 
 
 func _blocker_event(e: Dictionary) -> void:
