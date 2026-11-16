@@ -48,6 +48,7 @@ var _moon: Node2D
 var _blob: GradientTexture2D
 var _band: GradientTexture2D
 var _fade: GradientTexture2D
+var _dotx: GradientTexture2D
 
 
 ## Стан неба для рівня кампанії (небо міняється кожні кілька рівнів).
@@ -77,6 +78,7 @@ func _ready() -> void:
 	_blob = _gradient([Color(1, 1, 1, 1), Color(1, 1, 1, 0)], [0.0, 1.0], true)
 	_band = _gradient([Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 0)], [0.0, 0.75, 1.0], false)
 	_fade = _gradient([Color(1, 1, 1, 0), Color(1, 1, 1, 1)], [0.0, 1.0], false)
+	_dotx = _gradient([Color(1, 1, 1, 1), Color(1, 1, 1, 1), Color(1, 1, 1, 0)], [0.0, 0.55, 1.0], true)
 	var add := CanvasItemMaterial.new()
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	_glow = Node2D.new()
@@ -168,7 +170,8 @@ func _draw_glow() -> void:
 		var s: Array = _stars[i]
 		var p := Vector2(fmod(s[0] * w + t * (1.2 + s[5] * 2.2) * k, w), fmod(s[1] * h + t * 0.5 * s[5] * k, h))
 		var a: float = bright * (0.55 + 0.45 * sin(t * s[4] + s[3])) * (0.35 + s[5] * 0.6)
-		_glow.draw_circle(p, s[2] * k * 0.5, Color(1, 1, 1, a))
+		var sr: float = s[2] * k * 0.75
+		_glow.draw_texture_rect(_dotx, Rect2(p - Vector2(sr, sr), Vector2(sr, sr) * 2.0), false, Color(1, 1, 1, a))
 		if s[2] > 3.0:
 			_put_blob(p, s[2] * k * 2.0, Color8(200, 210, 255), a * 0.35)
 	# північне сяйво

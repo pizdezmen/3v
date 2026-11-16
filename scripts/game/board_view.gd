@@ -34,6 +34,10 @@ var _hint_tweens: Array = []
 var _frame_box: StyleBoxFlat
 var _shards: Shards
 var _birth: BirthFx
+var _shadow_layer: Node2D
+var _corner: Texture2D
+var _live_cache: Array = []
+var _live_frame := -1
 var _white: ShaderMaterial
 var _dim_box: StyleBoxFlat
 var _base_pos := Vector2.ZERO
@@ -53,6 +57,9 @@ func _ready() -> void:
 	_sel_mark.modulate = Color(1, 1, 1, 0.28)
 	_sel_mark.visible = false
 	add_child(_sel_mark)
+	_shadow_layer = Node2D.new()
+	_shadow_layer.draw.connect(_draw_shadows)
+	add_child(_shadow_layer)
 	add_child(_pieces_layer)
 	add_child(_over_layer)
 	add_child(_fx_layer)
@@ -65,6 +72,12 @@ func _ready() -> void:
 	sh.code = "shader_type canvas_item;\nvoid fragment() { COLOR = vec4(1.0, 1.0, 1.0, texture(TEXTURE, UV).a * COLOR.a); }"
 	_white = ShaderMaterial.new()
 	_white.shader = sh
+	var ci := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	for y in 64:
+		for x in 64:
+			var dd := Vector2(x + 0.5 - 32.0, y + 0.5 - 32.0).length()
+			ci.set_pixel(x, y, Color(1, 1, 1, clampf(31.5 - dd, 0.0, 1.0)))
+	_corner = ImageTexture.create_from_image(ci)
 	_frame_box = StyleBoxFlat.new()
 	_frame_box.bg_color = Art.FRAME
 	_frame_box.set_corner_radius_all(20)
@@ -128,11 +141,6 @@ func _overlay(i: int, tex: Texture2D, size: float) -> Sprite2D:
 func _make_piece(id: int, kind: int, color: int, pos: Vector2) -> Node2D:
 	var n := Node2D.new()
 	n.position = pos
-	var sh := Sprite2D.new()
-	sh.texture = Art.shadow
-	sh.position = Vector2(0, cell * 0.4)
-	sh.scale = Vector2(cell * 0.8 / 96.0, cell * 0.2 / 32.0)
-	n.add_child(sh)
 	var sp := Sprite2D.new()
 	n.add_child(sp)
 	n.set_meta("sp", sp)
@@ -153,15 +161,35 @@ func _set_look(n: Node2D, kind: int, color: int) -> void:
 	n.set_meta("live", kind != Board.Kind.NORMAL)
 
 
+func _play(x: int, y: int) -> bool:
+	return x >= 0 and y >= 0 and x < board.w and y < board.h and board.playable[y * board.w + x] == 1
+
+
 func _draw() -> void:
 	if board == null:
 		return
 	# затемнення під полем, щоб живе небо не сперечалося з каменями
 	draw_style_box(_dim_box, Rect2(Vector2(-28, -28), Vector2(board.w, board.h) * cell + Vector2(56, 56)))
+	# рамка поля: прості прямокутники й круглі зовнішні кути (малюються двома викликами на все поле)
+	var m := 13.0
+	var rounds: Array = []
 	for i in board.w * board.h:
-		if board.playable[i] == 1:
-			var r := Rect2(Vector2(i % board.w, i / board.w) * cell - Vector2(13, 13), Vector2(cell + 26, cell + 26))
-			draw_style_box(_frame_box, r)
+		if board.playable[i] != 1:
+			continue
+		var o := Vector2(i % board.w, i / board.w) * cell
+		draw_rect(Rect2(o - Vector2(m, 0), Vector2(cell + m * 2.0, cell)), Art.FRAME)
+		draw_rect(Rect2(o - Vector2(0, m), Vector2(cell, cell + m * 2.0)), Art.FRAME)
+		for dx in [-1, 1]:
+			for dy in [-1, 1]:
+				var cx := i % board.w
+				var cy := i / board.w
+				var corner := o + Vector2(cell if dx > 0 else 0.0, cell if dy > 0 else 0.0)
+				if _play(cx + dx, cy) or _play(cx, cy + dy) or _play(cx + dx, cy + dy):
+					draw_rect(Rect2(corner + Vector2(-m if dx < 0 else 0.0, -m if dy < 0 else 0.0), Vector2(m, m)), Art.FRAME)
+				else:
+					rounds.append(corner)
+	for corner in rounds:
+		draw_texture_rect(_corner, Rect2(corner - Vector2(m, m), Vector2(m, m) * 2.0), false, Art.FRAME)
 	for i in board.w * board.h:
 		if board.playable[i] == 1:
 			var x := i % board.w
@@ -605,8 +633,24 @@ func _push_neighbours(pos: Vector2, skip_id: int) -> void:
 		tw.tween_method(func(u: float): sp.position = dir * (sin(u * PI) * (1.0 - u) * amp), 0.0, 1.0, 0.42)
 
 
+## Тіні всіх каменів малюються одним шаром під каменями (один виклик замість окремого на кожен камінь).
+func _draw_shadows() -> void:
+	var half := Vector2(cell * 0.4, cell * 0.1)
+	for c in _pieces_layer.get_children():
+		var n := c as Node2D
+		if n == null or n.modulate.a <= 0.02:
+			continue
+		var h := half * n.scale.x
+		_shadow_layer.draw_texture_rect(Art.shadow, Rect2(n.position + Vector2(0, cell * 0.4) - h, h * 2.0), false,
+				Color(1, 1, 1, n.modulate.a))
+
+
 func live_boosters() -> Array:
+	if _live_frame == Engine.get_process_frames():
+		return _live_cache
+	_live_frame = Engine.get_process_frames()
 	var out: Array = []
+	_live_cache = out
 	for id in _nodes:
 		var n: Node2D = _nodes[id]
 		if n.get_meta("live", false):
@@ -841,6 +885,7 @@ func _process(delta: float) -> void:
 	if board == null:
 		return
 	_clock += delta
+	_shadow_layer.queue_redraw()
 	# життя після появи: сюрикен повільно обертається, зірка ледь пульсує
 	for n in live_boosters():
 		var kind: int = n.get_meta("kind")

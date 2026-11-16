@@ -30,17 +30,41 @@ var font: Font
 
 
 func _ready() -> void:
-	for i in 4:
-		pieces.append(load("res://assets/art/piece_%d.svg" % i))
-	bar = load("res://assets/art/bar.svg")
-	bomb = load("res://assets/art/bomb.svg")
-	star = load("res://assets/art/star.svg")
-	shur = load("res://assets/art/shur.svg")
-	crate1 = load("res://assets/art/crate1.svg")
-	crate2 = load("res://assets/art/crate2.svg")
-	ice1 = load("res://assets/art/ice1.svg")
-	ice2 = load("res://assets/art/ice2.svg")
-	chain = load("res://assets/art/chain.svg")
+	# усі малюнки поля складаємо в один аркуш: тоді камені малюються одним викликом, а не кожен окремо
+	var names := ["piece_0", "piece_1", "piece_2", "piece_3", "bar", "bomb", "star", "shur",
+			"crate1", "crate2", "ice1", "ice2", "chain"]
+	var tile := 256
+	var pad := 2
+	var step := tile + pad * 2
+	var sheet := Image.create(step * 4, step * 4, false, Image.FORMAT_RGBA8)
+	var slots: Array = []
+	for i in names.size():
+		var img: Image = (load("res://assets/art/%s.svg" % names[i]) as Texture2D).get_image()
+		if img.is_compressed():
+			img.decompress()
+		img.convert(Image.FORMAT_RGBA8)
+		if img.get_width() != tile or img.get_height() != tile:
+			img.resize(tile, tile, Image.INTERPOLATE_LANCZOS)
+		var at := Vector2i((i % 4) * step + pad, (i / 4) * step + pad)
+		sheet.blit_rect(img, Rect2i(0, 0, tile, tile), at)
+		slots.append(Rect2(at.x, at.y, tile, tile))
+	var sheet_tex := ImageTexture.create_from_image(sheet)
+	var parts: Array = []
+	for r in slots:
+		var t := AtlasTexture.new()
+		t.atlas = sheet_tex
+		t.region = r
+		parts.append(t)
+	pieces = parts.slice(0, 4)
+	bar = parts[4]
+	bomb = parts[5]
+	star = parts[6]
+	shur = parts[7]
+	crate1 = parts[8]
+	crate2 = parts[9]
+	ice1 = parts[10]
+	ice2 = parts[11]
+	chain = parts[12]
 	font_bold = load("res://assets/fonts/Rubik-ExtraBold.ttf")
 	font = load("res://assets/fonts/Rubik-SemiBold.ttf")
 	shadow = _radial(96, 32, Color(0, 0, 0, 0.5))

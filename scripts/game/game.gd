@@ -22,6 +22,9 @@ var _gear: Widgets.Gear
 var autoplay := false    # демонстрація: рівень проходить бот
 var _auto_rng := RandomNumberGenerator.new()
 var _auto_frame := 0
+var _perf_calls := 0
+var _perf_time := 0.0
+var _perf_sum := 0.0
 
 
 func _ready() -> void:
@@ -98,6 +101,15 @@ func _process(_delta: float) -> void:
 		view.input_enabled = not _finished and not is_instance_valid(_dialog) \
 				and board.moves_left > 0 and not board.is_won()
 	_auto_frame += 1
+	if autoplay and "perf" in OS.get_cmdline_user_args():
+		_perf_calls = max(_perf_calls, int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)))
+		_perf_time = max(_perf_time, Performance.get_monitor(Performance.TIME_PROCESS))
+		_perf_sum += Performance.get_monitor(Performance.TIME_PROCESS)
+		if _auto_frame % 120 == 0:
+			print("perf: max draw calls=%d max process=%.1f ms avg=%.2f ms" % [_perf_calls, _perf_time * 1000.0, _perf_sum / 120.0 * 1000.0])
+			_perf_calls = 0
+			_perf_time = 0.0
+			_perf_sum = 0.0
 	var rush: bool = autoplay and "rush" in OS.get_cmdline_user_args() and _auto_frame % 7 == 0
 	if autoplay and board != null and view.input_enabled and (rush or not view.is_busy()) and not is_instance_valid(_dialog):
 		var m := Bot.pick_move(board, _auto_rng)
