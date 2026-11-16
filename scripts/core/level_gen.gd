@@ -118,10 +118,34 @@ static func _build(number: int, attempt: int) -> Dictionary:
 			placed_moons += 1
 		if placed_moons > 0:
 			goals["moon"] = 0
+	# сяйво під каменями: прямокутна пляма, у середині два рівні
+	var glow_rows: Array = []
+	if number >= 6 and goals.size() < 3 and mrng.randf() < 0.3:
+		var gw := mrng.randi_range(3, w - 2)
+		var gh := mrng.randi_range(3, mini(6, h - 3))
+		var gx := (w - gw) / 2
+		var gy := mrng.randi_range(1, h - gh - 1)
+		var cells := 0
+		for y in h:
+			var line := ""
+			for x in w:
+				var inside: bool = x >= gx and x < gx + gw and y >= gy and y < gy + gh and grid[y][x] != "#"
+				var core: bool = inside and x > gx and x < gx + gw - 1 and y > gy and y < gy + gh - 1
+				line += "2" if core and d > 0.15 else ("1" if inside else "0")
+				if inside:
+					cells += 1
+			glow_rows.append(line)
+		if cells >= 6:
+			goals["glow"] = 0
+		else:
+			glow_rows = []
 	var layout: Array = []
 	for row in grid:
 		layout.append("".join(row))
-	return {"layout": layout, "goals": goals, "moves": 30}
+	var result := {"layout": layout, "goals": goals, "moves": 30}
+	if not glow_rows.is_empty():
+		result["glow"] = glow_rows
+	return result
 
 
 ## Розставляє перешкоди дзеркально. Повертає, скільки поставлено.

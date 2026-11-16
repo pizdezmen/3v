@@ -57,6 +57,7 @@ func _init() -> void:
 	test_combos()
 	test_obstacles()
 	test_moon()
+	test_glow()
 	test_holes_and_slide()
 	test_goals_and_finale()
 	test_shuffle()
@@ -339,6 +340,27 @@ func test_moon() -> void:
 				if e.get("exit", false) and e["goal"] == "moon":
 					exits += 1
 	check(exits == 1, "вихід місяця віддається екрану як окрема подія")
+
+
+func test_glow() -> void:
+	var lv := {"layout": ["rgbyr", "yrgby", "rrgyb", "byrgy"], "glow": ["00000", "00000", "21200", "00100"], "goals": {"glow": 0}, "moves": 30}
+	var b := Board.new()
+	b.setup(lv, 1)
+	check(b.goals.get("glow", 0) == 6, "ціль сяйва рахує рівні")
+	var steps := b.play_swap(b.idx(2, 2), b.idx(2, 3))
+	check(b.glow[b.idx(0, 2)] == 1 and b.glow[b.idx(1, 2)] == 0 and b.glow[b.idx(2, 2)] == 1, "збіг знімає по одному рівню сяйва на своїх клітинках")
+	check(b.glow[b.idx(2, 3)] == 1, "збіг поруч сяйва не знімає")
+	check(b.goals.get("glow", 0) == 3, "зняті рівні зараховано в ціль")
+	var events := 0
+	for e in steps[1]["blockers"]:
+		if e["what"] == "glow" and e["goal"] == "glow":
+			events += 1
+	check(events == 3, "зняття сяйва віддається екрану")
+	# бомба знімає рівень на кожній клітинці, де прибрала камінь
+	b.pieces[b.idx(1, 2)]["kind"] = Board.Kind.BOMB
+	b.pieces[b.idx(1, 2)]["color"] = -1
+	b.play_tap(b.idx(1, 2))
+	check(b.goals.get("glow", 0) == 0 and b.is_won(), "бустер знімає сяйво там, де прибирає камені")
 
 
 func test_holes_and_slide() -> void:

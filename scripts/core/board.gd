@@ -26,6 +26,7 @@ var pieces: Array = []            # null або {id, kind, color}
 var crate := PackedInt32Array()   # міцність ящика (0 = немає)
 var ice := PackedInt32Array()     # шари льоду на фішці (0..2)
 var chain := PackedByteArray()    # 1 = ланцюг на клітинці: камені падають крізь, гравець їх не рухає, ламає лише бустер
+var glow := PackedInt32Array()    # сяйво під клітинкою (0..2 рівні): рівень знімається, коли на клітинці прибирають камінь
 var goals := {}                   # назва -> скільки ще лишилось
 var goals_start := {}
 var moves_left := 0
@@ -59,6 +60,8 @@ func setup(level: Dictionary, seed_value: int) -> void:
 	crate.resize(n)
 	ice.resize(n)
 	chain.resize(n)
+	glow.resize(n)
+	glow.fill(0)
 	pieces.resize(n)
 	var random_cells: Array = []
 	for y in h:
@@ -110,6 +113,13 @@ func setup(level: Dictionary, seed_value: int) -> void:
 				_:
 					random_cells.append(i)
 	_fill_random(random_cells)
+	# сяйво задається окремою сіткою цифр: "glow": ["0120", ...]
+	var glow_rows: Array = level.get("glow", [])
+	for y in mini(h, glow_rows.size()):
+		var grow := String(glow_rows[y])
+		for x in mini(w, grow.length()):
+			if playable[y * w + x] == 1:
+				glow[y * w + x] = clampi(grow.unicode_at(x) - 48, 0, 2)
 	moves_total = int(level.get("moves", 20))
 	moves_left = moves_total
 	goals = {}
@@ -164,6 +174,8 @@ func count_on_board(key: String) -> int:
 			"chain":
 				if chain[i] > 0:
 					total += 1
+			"glow":
+				total += glow[i]
 			"moon":
 				if pieces[i] != null and pieces[i]["kind"] == Kind.MOON:
 					total += 1
@@ -501,6 +513,9 @@ func _remove_piece(i: int, t: float, to: int = -1) -> void:
 		goal = COLOR_NAMES[p["color"]]
 	_rm.append({"id": p["id"], "idx": i, "t": t, "to": to, "goal": goal,
 			"kind": p["kind"], "color": p["color"]})
+	if glow[i] > 0:
+		glow[i] -= 1
+		_bl.append({"idx": i, "what": "glow", "left": glow[i], "t": t, "goal": "glow" if _count("glow") else ""})
 
 
 func _apply_groups(groups: Array, swap_cells: Array, horizontal_swap: bool) -> void:
@@ -727,11 +742,14 @@ func _launch(from: int, t: float, carry: int) -> void:
 func _pick_target(from: int) -> int:
 	var tiers: Array = [[], [], [], []]
 	var moon_goal: bool = goals.get("moon", 0) > 0
+	var glow_goal: bool = goals.get("glow", 0) > 0
 	for j in w * h:
 		if playable[j] == 0 or j == from or _targeted.has(j) or _protected.has(j):
 			continue
 		var p = pieces[j]
-		if moon_goal and _under_moon(j) and (crate[j] > 0 or (p != null and p["kind"] != Kind.MOON)):
+		if glow_goal and glow[j] > 0 and crate[j] == 0 and ice[j] == 0 and p != null and p["kind"] != Kind.MOON:
+			tiers[0].append(j)
+		elif moon_goal and _under_moon(j) and (crate[j] > 0 or (p != null and p["kind"] != Kind.MOON)):
 			tiers[0].append(j)
 		elif crate[j] > 0:
 			tiers[0 if goals.get("crate", 0) > 0 else 2].append(j)
@@ -1092,6 +1110,13 @@ func _goal_bonus(i: int, color: int) -> int:
 			bonus += 7 if goals.get("ice", 0) > 0 else 2
 	if goals.get("moon", 0) > 0 and _under_moon(i):
 		bonus += 10
+	if goals.get("glow", 0) > 0:
+		if glow[i] > 0:
+			bonus += 6
+		for d in DIRS:
+			var gn := _neighbor(i, d)
+			if gn >= 0 and glow[gn] > 0:
+				bonus += 2
 	# нижчі ходи трохи корисніші: більше каскадів
 	bonus += (i / w) * 2 / max(1, h)
 	return bonus

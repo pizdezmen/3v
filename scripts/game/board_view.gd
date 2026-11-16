@@ -40,6 +40,7 @@ var _white: ShaderMaterial
 const CASCADE_SCALE := [0, 2, 4, 7, 9, 12, 14, 16, 19, 21]   # мажорна пентатоніка в півтонах
 var _dim_box: StyleBoxFlat
 var _cell_boxes := {}
+var _glow_view := PackedInt32Array()   # сяйво, як його зараз бачить гравець (логіка поля випереджає анімацію)
 var _base_pos := Vector2.ZERO
 var _clock := 0.0
 var _pending := false      # поле ще осідає: попереду падіння або збіги
@@ -98,6 +99,7 @@ func show_board(b: Board, area: Rect2) -> void:
 	_chains.clear()
 	_selected = -1
 	_sel_mark.visible = false
+	_glow_view = b.glow.duplicate()
 	_sel_mark.scale = Vector2.ONE * cell * 1.25 / 32.0
 	for i in b.w * b.h:
 		if b.playable[i] == 0:
@@ -178,6 +180,16 @@ func _draw() -> void:
 			draw_rect(r, col)
 		else:
 			draw_style_box(_cell_box(mask, col), r)
+	# сяйво під каменями: два рівні яскраве, один тьмяне
+	for i in mini(_glow_view.size(), board.w * board.h):
+		var level := _glow_view[i]
+		if level <= 0 or board.playable[i] != 1:
+			continue
+		var o := Vector2(i % board.w, i / board.w) * cell
+		var k: float = Art.GLOW_STRENGTH
+		draw_rect(Rect2(o, Vector2(cell, cell)), Color(Art.GLOW, (0.5 if level > 1 else 0.2) * k))
+		draw_texture_rect(Art.dot, Rect2(o - Vector2(cell, cell) * 0.1, Vector2(cell, cell) * 1.2), false,
+				Color(Art.GLOW, (0.34 if level > 1 else 0.15) * k))
 
 
 func _cell_box(mask: int, col: Color) -> StyleBoxFlat:
@@ -548,6 +560,12 @@ func _blocker_event(e: Dictionary) -> void:
 			else:
 				_ices.erase(i)
 				_vanish(s)
+		"glow":
+			if i < _glow_view.size():
+				_glow_view[i] = e["left"]
+			queue_redraw()
+			Sfx.play("click", 1.5 if e["left"] > 0 else 1.9, -9.0)
+			_burst(center(i), Art.GLOW, 5)
 		"chain":
 			Sfx.play("chain")
 			_burst(center(i), Color("#c9d1df"), 8)

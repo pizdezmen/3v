@@ -25,6 +25,9 @@ var ice1: Texture2D
 var ice2: Texture2D
 var chain: Texture2D
 var moon: Texture2D
+var glow_icon: Texture2D
+const GLOW := Color(235 / 255.0, 235 / 255.0, 1.0)   # місячне біле сяйво під каменями
+const GLOW_STRENGTH := 0.78
 var shadow: Texture2D
 var dot: Texture2D
 var font_bold: Font
@@ -74,6 +77,22 @@ func _ready() -> void:
 	font = load("res://assets/fonts/Rubik-SemiBold.ttf")
 	shadow = _radial(96, 32, Color(0, 0, 0, 0.5))
 	dot = _radial(32, 32, Color(1, 1, 1, 1))
+	glow_icon = _glow_tile(96)
+
+
+func _glow_tile(px: int) -> Texture2D:
+	var img := Image.create(px, px, false, Image.FORMAT_RGBA8)
+	var rad := px * 0.24
+	var m := px * 0.08
+	for y in px:
+		for x in px:
+			var q := Vector2(absf(x + 0.5 - px / 2.0), absf(y + 0.5 - px / 2.0)) - Vector2(px / 2.0 - m - rad, px / 2.0 - m - rad)
+			var dist := Vector2(maxf(q.x, 0.0), maxf(q.y, 0.0)).length() - rad
+			var edge := clampf(0.5 - dist, 0.0, 1.0)
+			var c := GLOW
+			c.a = edge * lerpf(0.95, 0.6, clampf(Vector2(x - px / 2.0, y - px / 2.0).length() / (px * 0.6), 0.0, 1.0))
+			img.set_pixel(x, y, c)
+	return ImageTexture.create_from_image(img)
 
 
 func _radial(width: int, height: int, color: Color) -> Texture2D:
@@ -116,6 +135,8 @@ func goal_texture(key: String) -> Texture2D:
 			return chain
 		"moon":
 			return moon
+		"glow":
+			return glow_icon
 	return pieces[Board.COLOR_NAMES.find(key)]
 
 
